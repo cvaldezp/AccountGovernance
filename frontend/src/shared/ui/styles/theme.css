@@ -1,0 +1,485 @@
+/* ============================================================
+   @usfq/design-system — theme.css
+   CSS custom properties (derived from token files) + all
+   .ds-* component classes.  Import once at the app root.
+   Visual identity aligned with AppRecovery_Modern (USFQ).
+   ============================================================ */
+
+/* ── 1. Custom properties (tokens) ─────────────────────────── */
+:root {
+  /* Brand — USFQ institutional reds */
+  --ds-brand-50:  #FFF0F1;
+  --ds-brand-100: #FFD5D7;
+  --ds-brand-200: #FFADB0;
+  --ds-brand-300: #FF7575;
+  --ds-brand-400: #E53935;   /* gradient "to" — lighter red   */
+  --ds-brand-500: #ED1C24;   /* redUsfq — primary brand       */
+  --ds-brand-600: #C0161D;   /* darkRedUsfq — hover/action    */
+  --ds-brand-700: #B91B1B;   /* CSS primary-color — gradient start */
+  --ds-brand-800: #7F0000;   /* CSS primary-dark              */
+  --ds-brand-900: #570000;
+
+  /* Neutral */
+  --ds-neutral-0:   #FFFFFF;
+  --ds-neutral-50:  #F8FAFC;
+  --ds-neutral-100: #F1F5F9;
+  --ds-neutral-200: #E2E8F0;
+  --ds-neutral-300: #CBD5E1;
+  --ds-neutral-400: #94A3B8;
+  --ds-neutral-500: #64748B;
+  --ds-neutral-600: #475569;
+  --ds-neutral-700: #334155;
+  --ds-neutral-800: #1E293B;
+  --ds-neutral-900: #0F172A;
+
+  /* Semantic status */
+  --ds-success-light:  #DCFCE7;
+  --ds-success-border: #BBF7D0;
+  --ds-success-main:   #22C55E;
+  --ds-success-dark:   #16A34A;
+
+  --ds-warning-light:  #FEF3C7;
+  --ds-warning-border: #FDE68A;
+  --ds-warning-main:   #F59E0B;
+  --ds-warning-dark:   #D97706;
+
+  --ds-danger-light:   #FEE2E2;
+  --ds-danger-border:  #FECACA;
+  --ds-danger-main:    #EF4444;
+  --ds-danger-dark:    #DC2626;
+
+  --ds-info-light:     #DBEAFE;
+  --ds-info-border:    #BFDBFE;
+  --ds-info-main:      #3B82F6;
+  --ds-info-dark:      #2563EB;
+
+  /* Typography — institutional fonts (Libre Baskerville + Quicksand) */
+  --ds-font-heading: 'Libre Baskerville', Georgia, 'Times New Roman', serif;
+  --ds-font-body:    'Quicksand', 'Inter', system-ui, -apple-system, sans-serif;
+  --ds-font-sans:    'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ds-font-mono:    ui-monospace, 'Cascadia Code', Consolas, monospace;
+
+  --ds-text-2xs: 10px;
+  --ds-text-xs:  11px;
+  --ds-text-sm:  12px;
+  --ds-text-base:14px;
+  --ds-text-md:  15px;
+  --ds-text-lg:  16px;
+  --ds-text-xl:  18px;
+  --ds-text-2xl: 22px;
+  --ds-text-3xl: 28px;
+
+  /* Radii — aligned with AppRecovery_Modern */
+  --ds-radius-sm:  4px;
+  --ds-radius-md:  6px;
+  --ds-radius-lg:  8px;
+  --ds-radius-xl:  12px;  /* buttons, inputs  (AppRecovery --radius-md) */
+  --ds-radius-2xl: 20px;  /* cards            (AppRecovery --radius-lg) */
+  --ds-radius-3xl: 24px;  /* info panels      */
+  --ds-radius-full:9999px;
+
+  /* Shadows — AppRecovery_Modern premium shadows */
+  --ds-shadow-sm:      0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+  --ds-shadow-md:      0 4px 6px -1px rgba(0,0,0,0.10), 0 2px 4px -1px rgba(0,0,0,0.06);
+  --ds-shadow-lg:      0 10px 15px -3px rgba(0,0,0,0.10), 0 4px 6px -2px rgba(0,0,0,0.05);
+  --ds-shadow-card:    0 25px 50px -12px rgba(0,0,0,0.12);
+  --ds-shadow-premium: 0 20px 25px -5px rgba(185,27,27,0.10), 0 10px 10px -5px rgba(185,27,27,0.04);
+  --ds-shadow-brand:   0 4px 15px rgba(237,28,36,0.30);
+
+  /* Transitions — material cubic-bezier (AppRecovery_Modern) */
+  --ds-transition-fast: 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+  --ds-transition-base: 0.20s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── 0. Fade-in animation ───────────────────────────────────── */
+@keyframes ds-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ds-spin { to { transform: rotate(360deg); } }
+
+/* ── 2. AppBadge (.ds-badge) ────────────────────────────────── */
+.ds-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--ds-radius-full);
+  font-size: var(--ds-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+
+.ds-badge--sm { padding: 1px 6px; font-size: var(--ds-text-2xs); }
+
+.ds-badge--success { background: var(--ds-success-light); color: var(--ds-success-dark); }
+.ds-badge--danger  { background: var(--ds-danger-light);  color: var(--ds-danger-dark);  }
+.ds-badge--warning { background: var(--ds-warning-light); color: var(--ds-warning-dark); }
+.ds-badge--info    { background: var(--ds-info-light);    color: var(--ds-info-dark);    }
+.ds-badge--neutral { background: var(--ds-neutral-100);   color: var(--ds-neutral-600);  }
+.ds-badge--brand   { background: var(--ds-brand-50);      color: var(--ds-brand-700);    }
+
+/* ── 3. AppButton (.ds-button) ──────────────────────────────── */
+.ds-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: none;
+  border-radius: var(--ds-radius-xl);
+  font-family: var(--ds-font-body);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--ds-transition-fast),
+    border-color var(--ds-transition-fast),
+    box-shadow var(--ds-transition-base),
+    transform var(--ds-transition-base),
+    opacity var(--ds-transition-fast);
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.ds-button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.ds-button--full-width { width: 100%; }
+
+/* Sizes */
+.ds-button--sm { padding: 5px 12px;  font-size: var(--ds-text-sm);   border-radius: var(--ds-radius-lg); }
+.ds-button--md { padding: 8px 18px;  font-size: var(--ds-text-base); }
+.ds-button--lg { padding: 12px 24px; font-size: var(--ds-text-md);  }
+
+/* Variants — primary: gradient + hover lift (AppRecovery_Modern) */
+.ds-button--primary {
+  background: linear-gradient(to right, var(--ds-brand-700), var(--ds-brand-400));
+  color: var(--ds-neutral-0);
+  box-shadow: var(--ds-shadow-brand);
+}
+.ds-button--primary:hover:not(:disabled) {
+  box-shadow: 0 8px 20px rgba(237, 28, 36, 0.40);
+  transform: translateY(-2px);
+}
+.ds-button--primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--ds-shadow-brand);
+}
+
+.ds-button--secondary {
+  background: var(--ds-neutral-0);
+  color: var(--ds-neutral-700);
+  border: 1px solid var(--ds-neutral-200);
+}
+.ds-button--secondary:hover:not(:disabled) {
+  background: var(--ds-neutral-50);
+  border-color: var(--ds-neutral-300);
+}
+
+.ds-button--danger {
+  background: var(--ds-danger-main);
+  color: var(--ds-neutral-0);
+}
+.ds-button--danger:hover:not(:disabled) { background: var(--ds-danger-dark); transform: translateY(-1px); }
+
+.ds-button--success {
+  background: var(--ds-success-main);
+  color: var(--ds-neutral-0);
+}
+.ds-button--success:hover:not(:disabled) { background: var(--ds-success-dark); transform: translateY(-1px); }
+
+.ds-button--ghost {
+  background: transparent;
+  color: var(--ds-neutral-600);
+}
+.ds-button--ghost:hover:not(:disabled) { background: var(--ds-neutral-100); }
+
+/* Loading spinner */
+.ds-button__spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255,255,255,.35);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: ds-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ── 4. AppCard (.ds-card) — glass-like, premium shadow ─────── */
+.ds-card {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--ds-neutral-200);
+  border-radius: var(--ds-radius-2xl);
+  padding: 20px;
+  box-shadow: var(--ds-shadow-card);
+  animation: ds-fade-in 0.2s ease both;
+}
+
+.ds-card--no-padding {
+  padding: 0;
+  overflow: hidden;
+}
+
+.ds-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.ds-card--no-padding .ds-card__header {
+  padding: 16px 20px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--ds-neutral-200);
+}
+
+.ds-card__title {
+  font-size: var(--ds-text-md);
+  font-weight: 700;
+  color: var(--ds-neutral-900);
+  line-height: 1.3;
+}
+
+.ds-card__description {
+  font-size: var(--ds-text-sm);
+  color: var(--ds-neutral-500);
+  margin-top: 3px;
+}
+
+.ds-card__action {
+  flex-shrink: 0;
+}
+
+/* ── 5. AppInput (.ds-input) ────────────────────────────────── */
+.ds-input {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ds-input__label {
+  font-size: var(--ds-text-xs);
+  font-weight: 600;
+  color: var(--ds-neutral-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ds-input__field {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--ds-neutral-0);
+  border: 1px solid var(--ds-neutral-200);
+  border-radius: var(--ds-radius-xl);
+  font-family: var(--ds-font-body);
+  font-size: var(--ds-text-base);
+  color: var(--ds-neutral-900);
+  outline: none;
+  transition:
+    border-color var(--ds-transition-fast),
+    box-shadow var(--ds-transition-fast);
+}
+
+.ds-input__field::placeholder { color: var(--ds-neutral-400); }
+
+.ds-input__field:focus {
+  border-color: var(--ds-brand-500);
+  box-shadow: 0 0 0 3px rgba(237, 28, 36, 0.12);
+}
+
+.ds-input--error .ds-input__field {
+  border-color: var(--ds-danger-main);
+}
+.ds-input--error .ds-input__field:focus {
+  box-shadow: 0 0 0 3px var(--ds-danger-light);
+}
+
+.ds-input__hint {
+  font-size: var(--ds-text-xs);
+  color: var(--ds-neutral-400);
+}
+
+.ds-input__error {
+  font-size: var(--ds-text-xs);
+  color: var(--ds-danger-dark);
+}
+
+/* select/textarea inherit .ds-input__field appearance */
+select.ds-input__field   { cursor: pointer; }
+textarea.ds-input__field { resize: vertical; min-height: 72px; }
+
+/* ── 6. AppTable (.ds-table) ────────────────────────────────── */
+.ds-table {
+  overflow-x: auto;
+}
+
+.ds-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ds-table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: var(--ds-text-xs);
+  font-weight: 700;
+  color: var(--ds-neutral-500);
+  border-bottom: 1px solid var(--ds-neutral-200);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  background: var(--ds-neutral-50);
+}
+
+.ds-table td {
+  padding: 12px;
+  font-size: var(--ds-text-base);
+  border-bottom: 1px solid var(--ds-neutral-200);
+  vertical-align: middle;
+  color: var(--ds-neutral-800);
+}
+
+.ds-table tr:last-child td { border-bottom: none; }
+
+.ds-table tr:hover td {
+  background: var(--ds-neutral-50);
+  transition: background var(--ds-transition-fast);
+}
+
+.ds-table__row--clickable { cursor: pointer; }
+
+.ds-table__empty {
+  text-align: center !important;
+  color: var(--ds-neutral-400);
+  padding: 40px 12px !important;
+  font-size: var(--ds-text-base);
+}
+
+/* ── 7. AppPageHeader (.ds-page-header) ─────────────────────── */
+.ds-page-header {
+  margin-bottom: 24px;
+}
+
+.ds-page-header__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  font-size: var(--ds-text-sm);
+  color: var(--ds-neutral-400);
+}
+
+.ds-page-header__breadcrumb-sep { margin: 0 2px; }
+
+.ds-page-header__breadcrumb-link {
+  background: none;
+  border: none;
+  color: var(--ds-brand-600);
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+  text-decoration: none;
+}
+.ds-page-header__breadcrumb-link:hover { text-decoration: underline; }
+
+.ds-page-header__breadcrumb-current { color: var(--ds-neutral-500); }
+
+.ds-page-header__main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+/* Headings use Libre Baskerville (institutional serif) */
+.ds-page-header__title {
+  font-size: var(--ds-text-2xl);
+  font-weight: 700;
+  color: var(--ds-neutral-900);
+  font-family: var(--ds-font-heading);
+  margin: 0 0 4px;
+  line-height: 1.2;
+}
+
+.ds-page-header__description {
+  font-size: var(--ds-text-base);
+  color: var(--ds-neutral-500);
+  margin: 0;
+}
+
+.ds-page-header__action { flex-shrink: 0; }
+
+/* ── 8. Stat cards ──────────────────────────────────────────── */
+.ds-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.ds-stat-card {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--ds-neutral-200);
+  border-radius: var(--ds-radius-2xl);
+  padding: 20px;
+  box-shadow: var(--ds-shadow-md);
+  animation: ds-fade-in 0.2s ease both;
+}
+
+.ds-stat-card__label {
+  font-size: var(--ds-text-xs);
+  font-weight: 600;
+  color: var(--ds-neutral-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+.ds-stat-card__value {
+  font-size: var(--ds-text-3xl);
+  font-weight: 700;
+  color: var(--ds-neutral-900);
+  font-family: var(--ds-font-heading);
+  line-height: 1.1;
+}
+
+/* ── 9. Loading & Alerts ────────────────────────────────────── */
+.ds-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 48px;
+  color: var(--ds-neutral-400);
+  font-size: var(--ds-text-base);
+  gap: 10px;
+}
+
+.ds-loading::before {
+  content: '';
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--ds-neutral-200);
+  border-top-color: var(--ds-brand-500);
+  border-radius: 50%;
+  animation: ds-spin 0.7s linear infinite;
+}
+
+.ds-alert {
+  padding: 12px 16px;
+  border-radius: var(--ds-radius-xl);
+  font-size: var(--ds-text-base);
+  margin-bottom: 16px;
+  border: 1px solid transparent;
+  animation: ds-fade-in 0.15s ease both;
+}
+
+.ds-alert--success { background: var(--ds-success-light); color: var(--ds-success-dark); border-color: var(--ds-success-border); }
+.ds-alert--error   { background: var(--ds-danger-light);  color: var(--ds-danger-dark);  border-color: var(--ds-danger-border);  }
+.ds-alert--warning { background: var(--ds-warning-light); color: var(--ds-warning-dark); border-color: var(--ds-warning-border); }
+.ds-alert--info    { background: var(--ds-info-light);    color: var(--ds-info-dark);    border-color: var(--ds-info-border);    }

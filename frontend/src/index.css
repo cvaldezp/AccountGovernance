@@ -1,0 +1,259 @@
+/* ============================================================
+   AccountGovernance — app-specific layout styles
+   Component-level styles live in shared/ui/styles/theme.css
+   ============================================================ */
+
+:root {
+  /* App layout vars (not part of DS tokens) */
+  --app-sidebar-width:  220px;
+  --app-header-height:  60px;
+  --app-bg:             linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  --app-sidebar-bg:     var(--ds-neutral-900);
+  --app-sidebar-text:   var(--ds-neutral-400);
+  --app-border:         var(--ds-neutral-200);
+  --app-text:           var(--ds-neutral-900);
+  --app-text-muted:     var(--ds-neutral-500);
+
+  font-family: var(--ds-font-body);
+  font-size: 14px;
+  color-scheme: light;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--app-bg);
+  background-attachment: fixed;
+  color: var(--app-text);
+  font-family: var(--ds-font-body);
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  text-align: left;
+  border: none;
+  min-height: 100vh;
+  display: block;
+}
+
+h1, h2, h3 { color: var(--app-text); font-family: var(--ds-font-heading); }
+
+/* ── App layout shell ─────────────────────────────────────── */
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.main-content {
+  margin-left: var(--app-sidebar-width);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.page-content {
+  padding: 24px;
+  flex: 1;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────── */
+.sidebar {
+  width: var(--app-sidebar-width);
+  background: var(--app-sidebar-bg);
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.sidebar-logo {
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-logo h2 {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.sidebar-logo span {
+  color: var(--app-sidebar-text);
+  font-size: 11px;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 12px 8px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--ds-radius-lg);
+  color: var(--app-sidebar-text);
+  cursor: pointer;
+  font-size: 14px;
+  margin-bottom: 2px;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  transition: background var(--ds-transition-fast), color var(--ds-transition-fast);
+}
+
+.nav-item:hover  { background: rgba(255,255,255,.07); color: #fff; }
+.nav-item.active {
+  background: linear-gradient(to right, var(--ds-brand-700), var(--ds-brand-600));
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(185, 27, 27, 0.35);
+}
+
+.nav-icon { font-size: 16px; width: 18px; text-align: center; flex-shrink: 0; }
+
+.sidebar-footer {
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--app-sidebar-text);
+  font-size: 11px;
+}
+
+/* ── Top bar ──────────────────────────────────────────────── */
+.top-bar {
+  height: var(--app-header-height);
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid var(--app-border);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  gap: 16px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+  backdrop-filter: blur(8px);
+}
+
+.topbar-env-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-warning-light);
+  color: var(--ds-warning-dark);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.topbar-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbar-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--ds-radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.topbar-user-info  { display: flex; flex-direction: column; }
+.topbar-user-name  { font-size: 13px; font-weight: 600; line-height: 1.2; }
+.topbar-user-role  { font-size: 11px; color: var(--app-text-muted); }
+
+/* ── Role selector (dev tool) ──────────────────────────────── */
+.role-selector { display: flex; align-items: center; gap: 8px; }
+.role-selector-label { font-size: 12px; color: var(--app-text-muted); white-space: nowrap; }
+.role-selector select {
+  padding: 5px 10px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--ds-radius-lg);
+  font-size: 13px;
+  background: var(--ds-neutral-0);
+  cursor: pointer;
+  outline: none;
+}
+
+/* ── User avatar (shared UI element, not a DS component) ────── */
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--ds-radius-full);
+  background: var(--ds-brand-600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* ── UserDetailPage — field layout helpers ─────────────────── */
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.detail-field-label {
+  font-size: 11px;
+  color: var(--app-text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detail-field-value { font-size: 14px; color: var(--app-text); }
+
+.field-readonly-badge {
+  font-size: 10px;
+  color: var(--app-text-muted);
+  background: var(--ds-neutral-100);
+  border: 1px solid var(--app-border);
+  border-radius: var(--ds-radius-sm);
+  padding: 1px 5px;
+  font-weight: 500;
+}
+
+.field-sensitive-badge {
+  font-size: 10px;
+  color: var(--ds-warning-dark);
+  background: var(--ds-warning-light);
+  border: 1px solid var(--ds-warning-border);
+  border-radius: var(--ds-radius-sm);
+  padding: 1px 5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}

@@ -1,0 +1,13 @@
+frontend/node_modules/
+frontend/dist/
+backend/**/bin/
+backend/**/obj/
+.vscode/
+*.code-workspace
+*.log
+logs/
+**/appsettings.Production.json
+**/appsettings.Local.json
+**/secrets.json
+**/.env
+**/.env.*
