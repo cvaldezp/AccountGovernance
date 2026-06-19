@@ -4,7 +4,9 @@ import type {
   AccountFormData, AccountPreviewData, ValidationResult, CreateResult,
 } from './types';
 
-// ── Mock fallback (mirrors gov.AccountTypes + gov.AccountSubTypes seed) ───────
+// ── Mock fallback — read-only data only ────────────────────────────────────────
+// Used exclusively by getAccountTypes() so the type selector works offline.
+// Mutating operations (validate-create, create) never fall back to mock.
 
 const MOCK_ACCOUNT_TYPES: AccountTypeInfo[] = [
   {
@@ -40,11 +42,14 @@ const MOCK_ACCOUNT_TYPES: AccountTypeInfo[] = [
   },
 ];
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function delay(ms = 300): Promise<void> {
-  return new Promise(r => setTimeout(r, ms));
+// ── Debug fetch wrapper ────────────────────────────────────────────────────────
+// TODO: remove console.log once integration is confirmed working
+function apiFetch(url: string, options?: RequestInit): Promise<Response> {
+  console.log('[API]', options?.method ?? 'GET', url);
+  return fetch(url, options);
 }
+
+// ── Type mappers ──────────────────────────────────────────────────────────────
 
 function mapSubType(raw: Record<string, unknown>): AccountSubTypeInfo {
   return {
@@ -73,6 +78,10 @@ function mapApiType(raw: Record<string, unknown>): AccountTypeInfo {
   };
 }
 
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export interface ValidateEmailResult {
@@ -82,49 +91,50 @@ export interface ValidateEmailResult {
 }
 
 export const accountCreationApi = {
+  // Falls back to static mock when backend is unavailable (non-mutating).
   async getAccountTypes(): Promise<AccountTypeInfo[]> {
     try {
-      const res = await fetch('/api/account-types');
-      if (!res.ok) throw new Error();
+      const res = await apiFetch('/api/account-types');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json() as Record<string, unknown>[];
       return data.map(mapApiType);
     } catch {
-      await delay(150);
       return MOCK_ACCOUNT_TYPES;
     }
   },
 
+  // No mock fallback — a failure here means the AD check did NOT happen.
   async validateRecoveryEmail(email: string): Promise<ValidateEmailResult> {
+    const url = '/api/accounts/validate-recovery-email';
     try {
-      const res = await fetch('/api/accounts/validate-recovery-email', {
+      const res = await apiFetch(url, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ email }),
       });
-      if (!res.ok) throw new Error();
-      return res.json() as Promise<{ isValid: boolean; message: string; userDisplayName?: string }>;
-    } catch {
-      await delay(450);
-      const normalized = email.trim().toLowerCase();
-      if (!normalized.includes('@'))
-        return { isValid: false, message: 'El correo no tiene un formato válido.' };
-      if (normalized.endsWith('@usfq.edu.ec')) {
-        const local = normalized.split('@')[0];
-        const displayName = local.split('.').map((p: string) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
-        return { isValid: true, message: `Usuario encontrado en AD: ${displayName}`, userDisplayName: displayName };
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status}${body ? ` — ${body}` : ''}`);
       }
-      return { isValid: false, message: 'No se encontró un usuario en AD con ese correo de recuperación.' };
+      return res.json() as Promise<ValidateEmailResult>;
+    } catch (err) {
+      return {
+        isValid: false,
+        message: `No se pudo verificar el correo en el servidor: ${errorMessage(err)}`,
+      };
     }
   },
 
+  // Falls back to client-side computation — preview is cosmetic, not a write operation.
   async previewAccount(
     typeKey:      AccountTypeKey,
     form:         AccountFormData,
     typeInfo:     AccountTypeInfo,
     subTypeInfo?: AccountSubTypeInfo,
   ): Promise<AccountPreviewData> {
+    const url = '/api/accounts/preview';
     try {
-      const res = await fetch('/api/accounts/preview', {
+      const res = await apiFetch(url, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
@@ -135,7 +145,7 @@ export const accountCreationApi = {
           apellidos:      form.apellidos,
         }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const raw = await res.json() as {
         userPrincipalName: string; samAccountName: string;
         displayName: string; company: string; description: string; extensionAttribute14: string;
@@ -149,20 +159,21 @@ export const accountCreationApi = {
         extensionAttribute14: raw.extensionAttribute14,
       };
     } catch {
-      await delay(200);
       return computePreview(typeKey, form, typeInfo, subTypeInfo);
     }
   },
 
+  // No mock fallback — a network or server error is returned as canCreate:false.
   async validateCreate(
     typeKey:      AccountTypeKey,
     subTypeKey:   string | undefined,
     form:         AccountFormData,
-    typeInfo:     AccountTypeInfo,
-    subTypeInfo?: AccountSubTypeInfo,
+    _typeInfo:    AccountTypeInfo,
+    _subTypeInfo?: AccountSubTypeInfo,
   ): Promise<ValidationResult> {
+    const url = '/api/accounts/validate-create';
     try {
-      const res = await fetch('/api/accounts/validate-create', {
+      const res = await apiFetch(url, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
@@ -175,7 +186,17 @@ export const accountCreationApi = {
           password:       form.password,
         }),
       });
-      if (!res.ok) throw new Error();
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        return {
+          canCreate: false,
+          errors:    [`Error del servidor (HTTP ${res.status})${body ? `: ${body}` : ''}`],
+          warnings:  [],
+          preview:   null,
+        };
+      }
+
       const raw = await res.json() as {
         canCreate: boolean;
         errors:    string[];
@@ -200,32 +221,25 @@ export const accountCreationApi = {
             }
           : null,
       };
-    } catch {
-      await delay(600);
-      // Mock: run all checks locally
-      const preview = computePreview(typeKey, form, typeInfo, subTypeInfo);
-      const errors: string[]   = [];
-      const warnings: string[] = [];
-
-      if (!form.accountName.trim()) errors.push("El campo 'Cuenta' es obligatorio.");
-      if (!form.password)            errors.push("La contraseña es obligatoria.");
-      else if (form.password.length < (typeInfo.defaultPasswordLength ?? 16))
-        errors.push(`La contraseña debe tener al menos ${typeInfo.defaultPasswordLength} caracteres.`);
-      if (!form.recoveryEmail.trim()) errors.push("El correo de recuperación es obligatorio.");
-
-      warnings.push("No se pudo verificar en Active Directory (servicio no disponible en modo local).");
-
-      return { canCreate: errors.length === 0, errors, warnings, preview };
+    } catch (err) {
+      return {
+        canCreate: false,
+        errors:    [`No se pudo conectar con el servidor de validación: ${errorMessage(err)}`],
+        warnings:  [],
+        preview:   null,
+      };
     }
   },
 
+  // No mock fallback — a network or server error is returned as success:false.
   async createAccount(
-    typeKey:      AccountTypeKey,
-    subTypeKey:   string | undefined,
-    form:         AccountFormData,
+    typeKey:    AccountTypeKey,
+    subTypeKey: string | undefined,
+    form:       AccountFormData,
   ): Promise<CreateResult> {
+    const url = '/api/accounts/create';
     try {
-      const res = await fetch('/api/accounts/create', {
+      const res = await apiFetch(url, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
@@ -238,6 +252,15 @@ export const accountCreationApi = {
           password:      form.password,
         }),
       });
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        return {
+          success: false,
+          message: `Error del servidor (HTTP ${res.status})${body ? `: ${body}` : ''}`,
+        };
+      }
+
       const raw = await res.json() as {
         success: boolean; message: string;
         samAccountName?: string; userPrincipalName?: string; displayName?: string;
@@ -249,15 +272,10 @@ export const accountCreationApi = {
         userPrincipalName: raw.userPrincipalName,
         displayName:       raw.displayName,
       };
-    } catch {
-      await delay(800);
-      // Mock: always succeeds locally
+    } catch (err) {
       return {
-        success:           true,
-        message:           'Cuenta creada correctamente (modo local — sin conexión a AD).',
-        samAccountName:    form.accountName,
-        userPrincipalName: `${form.accountName}@usfq.edu.ec`,
-        displayName:       [form.firstName, form.apellidos].filter(Boolean).join(' '),
+        success: false,
+        message: `No se pudo conectar con el servidor: ${errorMessage(err)}`,
       };
     }
   },
