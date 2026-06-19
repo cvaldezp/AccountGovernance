@@ -307,6 +307,40 @@ BEGIN
 END
 GO
 
+-- ── 8. Account creation audit log ───────────────────────────────────────────
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.tables t
+    JOIN sys.schemas s ON t.schema_id = s.schema_id
+    WHERE t.name = 'AccountCreationAudit' AND s.name = 'gov'
+)
+BEGIN
+    CREATE TABLE gov.AccountCreationAudit (
+        Id             INT           NOT NULL IDENTITY(1,1) PRIMARY KEY,
+        Operator       NVARCHAR(200) NOT NULL,          -- Windows identity of the technician
+        AccountTypeKey NVARCHAR(50)  NOT NULL,
+        SubTypeKey     NVARCHAR(50)  NULL,
+        AccountName    NVARCHAR(200) NOT NULL,          -- Raw "Cuenta" input
+        SamAccountName NVARCHAR(200) NOT NULL,
+        Upn            NVARCHAR(500) NOT NULL,
+        DisplayName    NVARCHAR(500) NULL,
+        Company        NVARCHAR(200) NULL,
+        Description    NVARCHAR(500) NULL,
+        ExtAttr14      NVARCHAR(100) NULL,
+        TargetOU       NVARCHAR(500) NULL,
+        RecoveryEmail  NVARCHAR(500) NULL,
+        Success        BIT           NOT NULL,
+        ErrorMessage   NVARCHAR(MAX) NULL,
+        CreatedAt      DATETIME2     NOT NULL DEFAULT GETUTCDATE()
+        -- Password is NEVER stored
+    );
+
+    CREATE INDEX IX_Gov_AccountAudit_CreatedAt      ON gov.AccountCreationAudit (CreatedAt DESC);
+    CREATE INDEX IX_Gov_AccountAudit_SamAccountName ON gov.AccountCreationAudit (SamAccountName);
+    CREATE INDEX IX_Gov_AccountAudit_Operator       ON gov.AccountCreationAudit (Operator);
+END
+GO
+
 -- ── 5. Seed: field definitions ────────────────────────────────────────────────
 
 IF NOT EXISTS (SELECT 1 FROM gov.FieldDefinitions WHERE FieldKey = 'field-ext-email')

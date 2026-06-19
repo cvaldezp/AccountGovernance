@@ -35,7 +35,9 @@ public sealed class AdGateway(
         "lastLogonTimestamp", "distinguishedName",
     ];
 
-    // ── Public API ────────────────────────────────────────────────────────────
+    private static readonly string[] ExistenceAttributes = ["sAMAccountName"];
+
+    // ── User search ────────────────────────────────────────────────────────────
 
     public async Task<AdSearchResult> SearchUsersAsync(
         string query, int maxResults = 20, CancellationToken ct = default)
@@ -57,12 +59,161 @@ public sealed class AdGateway(
         return result.Users.Count > 0 ? result.Users[0] : null;
     }
 
-    // ── Filter construction ───────────────────────────────────────────────────
+    // ── Pre-creation validation ────────────────────────────────────────────────
 
-    /// <summary>
-    /// Narrow OR filter on institutional identifiers only.
-    /// No wildcard on displayName — avoids size-limit explosions.
-    /// </summary>
+    public Task<bool> SamAccountNameExistsAsync(string sam, CancellationToken ct = default)
+    {
+        var filter = $"(&(objectClass=user)(sAMAccountName={EscapeLdap(sam)}))";
+        return CountAsync(filter, ct);
+    }
+
+    public Task<bool> UserPrincipalNameExistsAsync(string upn, CancellationToken ct = default)
+    {
+        var filter = $"(&(objectClass=user)(userPrincipalName={EscapeLdap(upn)}))";
+        return CountAsync(filter, ct);
+    }
+
+    public Task<bool> UserExistsAndIsEnabledAsync(string upnOrMail, CancellationToken ct = default)
+    {
+        // Match by UPN or mail; exclude disabled accounts (ACCOUNTDISABLE bit = 0x02)
+        var esc    = EscapeLdap(upnOrMail);
+        var filter = $"(&(objectClass=user)(|(userPrincipalName={esc})(mail={esc}))" +
+                     "(!(userAccountControl:1.2.840.113556.1.4.803:=2)))";
+        return CountAsync(filter, ct);
+    }
+
+    public Task<bool> OuExistsAsync(string ouDistinguishedName, CancellationToken ct = default)
+    {
+        return Task.Run(() =>
+        {
+            using var conn = CreateConnection();
+            conn.Bind();
+
+            var req = new SearchRequest(
+                ouDistinguishedName,
+                "(objectClass=organizationalUnit)",
+                SearchScope.Base,
+                ["distinguishedName"])
+            {
+                SizeLimit = 1,
+                TimeLimit = TimeSpan.FromSeconds(options.Value.TimeoutSeconds),
+            };
+
+            try
+            {
+                var resp = (SearchResponse)conn.SendRequest(req);
+                return resp.Entries.Count > 0;
+            }
+            catch (DirectoryOperationException ex)
+                when (ex.Response?.ResultCode == ResultCode.NoSuchObject)
+            {
+                return false;
+            }
+        }, ct);
+    }
+
+    // ── Account provisioning ───────────────────────────────────────────────────
+
+    public Task<AdCreateUserResult> CreateUserAsync(AdCreateUserRequest req, CancellationToken ct = default)
+    {
+        return Task.Run<AdCreateUserResult>(() =>
+        {
+            using var conn = CreateConnection();
+            conn.Bind();
+
+            try
+            {
+                // 1. Create the disabled user object
+                var addReq = new AddRequest(req.UserDn);
+                addReq.Attributes.Add(new DirectoryAttribute("objectClass",
+                    "top", "person", "organizationalPerson", "user"));
+                addReq.Attributes.Add(new DirectoryAttribute("sAMAccountName",       req.SamAccountName));
+                addReq.Attributes.Add(new DirectoryAttribute("userPrincipalName",    req.UserPrincipalName));
+                addReq.Attributes.Add(new DirectoryAttribute("displayName",          req.DisplayName));
+                addReq.Attributes.Add(new DirectoryAttribute("userAccountControl",   "514")); // disabled
+
+                if (!string.IsNullOrWhiteSpace(req.GivenName))
+                    addReq.Attributes.Add(new DirectoryAttribute("givenName", req.GivenName));
+                if (!string.IsNullOrWhiteSpace(req.Sn))
+                    addReq.Attributes.Add(new DirectoryAttribute("sn", req.Sn));
+                if (!string.IsNullOrWhiteSpace(req.Company))
+                    addReq.Attributes.Add(new DirectoryAttribute("company", req.Company));
+                if (!string.IsNullOrWhiteSpace(req.Description))
+                    addReq.Attributes.Add(new DirectoryAttribute("description", req.Description));
+                if (!string.IsNullOrWhiteSpace(req.ExtensionAttribute14))
+                    addReq.Attributes.Add(new DirectoryAttribute("extensionAttribute14", req.ExtensionAttribute14));
+                if (!string.IsNullOrWhiteSpace(req.RecoveryEmail))
+                    addReq.Attributes.Add(new DirectoryAttribute("Custom-External-Email-Address", req.RecoveryEmail));
+
+                conn.SendRequest(addReq);
+
+                // 2. Set password (requires SSL or signed/sealed SASL — encoding: UTF-16LE with quotes)
+                var pwdBytes = Encoding.Unicode.GetBytes($"\"{req.Password}\"");
+                var pwdMod   = new DirectoryAttributeModification
+                {
+                    Name      = "unicodePwd",
+                    Operation = DirectoryAttributeOperation.Replace,
+                };
+                pwdMod.Add(pwdBytes);
+
+                var setPwd = new ModifyRequest(req.UserDn);
+                setPwd.Modifications.Add(pwdMod);
+                conn.SendRequest(setPwd);
+
+                // 3. Enable the account
+                var enableMod = new DirectoryAttributeModification
+                {
+                    Name      = "userAccountControl",
+                    Operation = DirectoryAttributeOperation.Replace,
+                };
+                enableMod.Add("512"); // Normal account, enabled
+                var enable = new ModifyRequest(req.UserDn);
+                enable.Modifications.Add(enableMod);
+                conn.SendRequest(enable);
+
+                // 4. Read back the objectGuid
+                var searchReq = new SearchRequest(
+                    req.UserDn, "(objectClass=user)", SearchScope.Base, ["objectGuid"])
+                {
+                    SizeLimit = 1,
+                    TimeLimit = TimeSpan.FromSeconds(options.Value.TimeoutSeconds),
+                };
+                var searchResp = (SearchResponse)conn.SendRequest(searchReq);
+                string? guid   = null;
+                if (searchResp.Entries.Count > 0)
+                {
+                    var raw = searchResp.Entries[0].Attributes["objectGuid"];
+                    if (raw?.Count > 0)
+                        guid = new Guid((byte[])raw[0]).ToString();
+                }
+
+                logger.LogInformation(
+                    "AD user created — SAM: {Sam}, UPN: {Upn}, DN: {Dn}",
+                    req.SamAccountName, req.UserPrincipalName, req.UserDn);
+
+                return new AdCreateUserResult(true, "Cuenta creada correctamente en Active Directory.", guid);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex,
+                    "Error creating AD user SAM={Sam}, UPN={Upn}",
+                    req.SamAccountName, req.UserPrincipalName);
+
+                // Try to clean up the partial object
+                try
+                {
+                    conn.SendRequest(new DeleteRequest(req.UserDn));
+                    logger.LogWarning("Cleaned up partial AD object {Dn}", req.UserDn);
+                }
+                catch { /* best-effort rollback */ }
+
+                return new AdCreateUserResult(false, $"Error en Active Directory: {ex.Message}", null);
+            }
+        }, ct);
+    }
+
+    // ── Filter construction ────────────────────────────────────────────────────
+
     private string BuildSearchFilter(string q)
     {
         var escaped = EscapeLdap(q);
@@ -96,7 +247,26 @@ public sealed class AdGateway(
         return $"(&(objectClass=user)(objectCategory=person)(|{or}))";
     }
 
-    // ── Search execution ──────────────────────────────────────────────────────
+    // ── Internal helpers ───────────────────────────────────────────────────────
+
+    private Task<bool> CountAsync(string filter, CancellationToken ct)
+    {
+        return Task.Run(() =>
+        {
+            using var conn = CreateConnection();
+            conn.Bind();
+
+            var req = new SearchRequest(
+                options.Value.BaseDn, filter, SearchScope.Subtree, ExistenceAttributes)
+            {
+                SizeLimit = 1,
+                TimeLimit = TimeSpan.FromSeconds(options.Value.TimeoutSeconds),
+            };
+
+            var resp = (SearchResponse)conn.SendRequest(req);
+            return resp.Entries.Count > 0;
+        }, ct);
+    }
 
     private Task<AdSearchResult> RunSearchAsync(
         string rawQuery, string filter, int sizeLimit,
@@ -145,7 +315,7 @@ public sealed class AdGateway(
         }, ct);
     }
 
-    // ── Connection ────────────────────────────────────────────────────────────
+    // ── Connection ─────────────────────────────────────────────────────────────
 
     private LdapConnection CreateConnection()
     {

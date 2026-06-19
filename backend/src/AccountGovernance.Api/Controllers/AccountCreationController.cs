@@ -51,4 +51,44 @@ public sealed class AccountCreationController(IAccountCreationService svc) : Con
             ? Ok(result.Data)
             : BadRequest(new { error = result.Error, code = result.ErrorCode });
     }
+
+    /// <summary>
+    /// Validates all parameters for account creation without creating anything in AD.
+    /// Returns canCreate, errors, warnings, and the computed attribute preview.
+    /// </summary>
+    [HttpPost("accounts/validate-create")]
+    [ProducesResponseType(typeof(ValidateCreateAccountResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ValidateCreate(
+        [FromBody] AccountCreationRequestDto request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.AccountTypeKey))
+            return BadRequest(new { error = "El campo 'accountTypeKey' es requerido." });
+
+        var result = await svc.ValidateCreateAsync(request, ct);
+        return result.IsSuccess
+            ? Ok(result.Data)
+            : StatusCode(500, new { error = result.Error });
+    }
+
+    /// <summary>
+    /// Creates a user account in Active Directory.
+    /// The result is audited in gov.AccountCreationAudit — password is never stored.
+    /// </summary>
+    [HttpPost("accounts/create")]
+    [ProducesResponseType(typeof(CreateAccountResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateAccount(
+        [FromBody] AccountCreationRequestDto request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.AccountTypeKey))
+            return BadRequest(new { error = "El campo 'accountTypeKey' es requerido." });
+
+        var operatorUpn = User.Identity?.Name ?? "UNKNOWN";
+        var result      = await svc.CreateAsync(request, operatorUpn, ct);
+
+        return result.IsSuccess
+            ? Ok(result.Data)
+            : BadRequest(new { error = result.Error, code = result.ErrorCode });
+    }
 }

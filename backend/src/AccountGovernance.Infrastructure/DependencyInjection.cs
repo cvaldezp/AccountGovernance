@@ -22,9 +22,10 @@ public static class DependencyInjection
         services.AddSingleton<IDbConnectionFactory, SqlConnectionFactory>();
 
         // Repositories
-        services.AddScoped<IAuditRepository,       AuditRepository>();
-        services.AddScoped<IPermissionRepository,   PermissionRepository>();
-        services.AddScoped<IAccountTypeRepository,  AccountTypeRepository>();
+        services.AddScoped<IAuditRepository,                AuditRepository>();
+        services.AddScoped<IPermissionRepository,            PermissionRepository>();
+        services.AddScoped<IAccountTypeRepository,           AccountTypeRepository>();
+        services.AddScoped<IAccountCreationAuditRepository,  AccountCreationAuditRepository>();
 
         return services;
     }

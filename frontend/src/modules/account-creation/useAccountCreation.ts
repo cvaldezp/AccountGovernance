@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import type {
   AccountTypeKey, AccountSubTypeKey, AccountTypeInfo, AccountSubTypeInfo,
   AccountFormData, AccountPreviewData, RecoveryEmailValidation,
+  CreationStep, ValidationResult, CreateResult,
 } from './types';
 import { computePreview } from './accountTypes';
 import { accountCreationApi } from './accountCreationApi';
@@ -52,6 +53,11 @@ export function useAccountCreation() {
   const [form,            setForm]            = useState<AccountFormData>(BASE_FORM);
   const [emailValidation, setEmailValidation] = useState<RecoveryEmailValidation>(IDLE_VALIDATION);
 
+  // Creation flow
+  const [creationStep,      setCreationStep]      = useState<CreationStep>('form');
+  const [validationResult,  setValidationResult]  = useState<ValidationResult | null>(null);
+  const [createResult,      setCreateResult]      = useState<CreateResult | null>(null);
+
   useEffect(() => {
     accountCreationApi.getAccountTypes()
       .then(types => setAccountTypes(types))
@@ -97,6 +103,15 @@ export function useAccountCreation() {
     setSelectedSubType(null);
     setForm(BASE_FORM);
     setEmailValidation(IDLE_VALIDATION);
+    setCreationStep('form');
+    setValidationResult(null);
+    setCreateResult(null);
+  }
+
+  function backToForm() {
+    setCreationStep('form');
+    setValidationResult(null);
+    setCreateResult(null);
   }
 
   function generatePassword() {
@@ -120,6 +135,52 @@ export function useAccountCreation() {
     }
   }
 
+  async function validateAndProceed() {
+    if (!selectedType || !typeInfo) return;
+
+    setCreationStep('validating');
+    try {
+      const result = await accountCreationApi.validateCreate(
+        selectedType,
+        selectedSubType ?? undefined,
+        form,
+        typeInfo,
+        subTypeInfo,
+      );
+      setValidationResult(result);
+      setCreationStep('confirming');
+    } catch {
+      setValidationResult({
+        canCreate: false,
+        errors:    ['Error al conectar con el servicio de validación.'],
+        warnings:  [],
+        preview:   preview,
+      });
+      setCreationStep('confirming');
+    }
+  }
+
+  async function confirmCreate() {
+    if (!selectedType || !validationResult?.canCreate) return;
+
+    setCreationStep('creating');
+    try {
+      const result = await accountCreationApi.createAccount(
+        selectedType,
+        selectedSubType ?? undefined,
+        form,
+      );
+      setCreateResult(result);
+      setCreationStep('result');
+    } catch {
+      setCreateResult({
+        success: false,
+        message: 'Error al conectar con el servicio de creación.',
+      });
+      setCreationStep('result');
+    }
+  }
+
   return {
     accountTypes,
     typesLoading,
@@ -130,11 +191,17 @@ export function useAccountCreation() {
     form,
     preview,
     emailValidation,
+    creationStep,
+    validationResult,
+    createResult,
     selectType,
     selectSubType,
     resetType,
+    backToForm,
     updateField,
     generatePassword,
     validateRecoveryEmail,
+    validateAndProceed,
+    confirmCreate,
   };
 }

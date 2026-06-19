@@ -58,3 +58,27 @@ export interface RecoveryEmailValidation {
   message:          string;
   userDisplayName?: string;
 }
+
+// ── Creation flow ─────────────────────────────────────────────────────────────
+
+export type CreationStep =
+  | 'form'        // filling in the form
+  | 'validating'  // calling validate-create
+  | 'confirming'  // showing validation result, awaiting confirmation
+  | 'creating'    // calling create
+  | 'result';     // showing final result
+
+export interface ValidationResult {
+  canCreate: boolean;
+  errors:    string[];
+  warnings:  string[];
+  preview:   AccountPreviewData | null;
+}
+
+export interface CreateResult {
+  success:            boolean;
+  message:            string;
+  samAccountName?:    string;
+  userPrincipalName?: string;
+  displayName?:       string;
+}

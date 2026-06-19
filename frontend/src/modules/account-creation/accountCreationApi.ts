@@ -1,5 +1,8 @@
 import { computePreview } from './accountTypes';
-import type { AccountTypeInfo, AccountTypeKey, AccountSubTypeInfo, AccountSubTypeKey, AccountFormData, AccountPreviewData } from './types';
+import type {
+  AccountTypeInfo, AccountTypeKey, AccountSubTypeInfo, AccountSubTypeKey,
+  AccountFormData, AccountPreviewData, ValidationResult, CreateResult,
+} from './types';
 
 // ── Mock fallback (mirrors gov.AccountTypes + gov.AccountSubTypes seed) ───────
 
@@ -148,6 +151,114 @@ export const accountCreationApi = {
     } catch {
       await delay(200);
       return computePreview(typeKey, form, typeInfo, subTypeInfo);
+    }
+  },
+
+  async validateCreate(
+    typeKey:      AccountTypeKey,
+    subTypeKey:   string | undefined,
+    form:         AccountFormData,
+    typeInfo:     AccountTypeInfo,
+    subTypeInfo?: AccountSubTypeInfo,
+  ): Promise<ValidationResult> {
+    try {
+      const res = await fetch('/api/accounts/validate-create', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          accountTypeKey: typeKey,
+          subTypeKey,
+          accountName:    form.accountName,
+          firstName:      form.firstName,
+          apellidos:      form.apellidos,
+          recoveryEmail:  form.recoveryEmail,
+          password:       form.password,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      const raw = await res.json() as {
+        canCreate: boolean;
+        errors:    string[];
+        warnings:  string[];
+        preview: {
+          userPrincipalName: string; samAccountName: string;
+          displayName: string; company: string; description: string; extensionAttribute14: string;
+        } | null;
+      };
+      return {
+        canCreate: raw.canCreate,
+        errors:    raw.errors ?? [],
+        warnings:  raw.warnings ?? [],
+        preview:   raw.preview
+          ? {
+              userPrincipalName:    raw.preview.userPrincipalName,
+              sAMAccountName:       raw.preview.samAccountName,
+              displayName:          raw.preview.displayName,
+              company:              raw.preview.company ?? '',
+              description:          raw.preview.description,
+              extensionAttribute14: raw.preview.extensionAttribute14,
+            }
+          : null,
+      };
+    } catch {
+      await delay(600);
+      // Mock: run all checks locally
+      const preview = computePreview(typeKey, form, typeInfo, subTypeInfo);
+      const errors: string[]   = [];
+      const warnings: string[] = [];
+
+      if (!form.accountName.trim()) errors.push("El campo 'Cuenta' es obligatorio.");
+      if (!form.password)            errors.push("La contraseña es obligatoria.");
+      else if (form.password.length < (typeInfo.defaultPasswordLength ?? 16))
+        errors.push(`La contraseña debe tener al menos ${typeInfo.defaultPasswordLength} caracteres.`);
+      if (!form.recoveryEmail.trim()) errors.push("El correo de recuperación es obligatorio.");
+
+      warnings.push("No se pudo verificar en Active Directory (servicio no disponible en modo local).");
+
+      return { canCreate: errors.length === 0, errors, warnings, preview };
+    }
+  },
+
+  async createAccount(
+    typeKey:      AccountTypeKey,
+    subTypeKey:   string | undefined,
+    form:         AccountFormData,
+  ): Promise<CreateResult> {
+    try {
+      const res = await fetch('/api/accounts/create', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          accountTypeKey: typeKey,
+          subTypeKey,
+          accountName:   form.accountName,
+          firstName:     form.firstName,
+          apellidos:     form.apellidos,
+          recoveryEmail: form.recoveryEmail,
+          password:      form.password,
+        }),
+      });
+      const raw = await res.json() as {
+        success: boolean; message: string;
+        samAccountName?: string; userPrincipalName?: string; displayName?: string;
+      };
+      return {
+        success:           raw.success,
+        message:           raw.message,
+        samAccountName:    raw.samAccountName,
+        userPrincipalName: raw.userPrincipalName,
+        displayName:       raw.displayName,
+      };
+    } catch {
+      await delay(800);
+      // Mock: always succeeds locally
+      return {
+        success:           true,
+        message:           'Cuenta creada correctamente (modo local — sin conexión a AD).',
+        samAccountName:    form.accountName,
+        userPrincipalName: `${form.accountName}@usfq.edu.ec`,
+        displayName:       [form.firstName, form.apellidos].filter(Boolean).join(' '),
+      };
     }
   },
 };

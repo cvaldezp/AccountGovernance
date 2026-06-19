@@ -3,6 +3,8 @@ import { AccountTypeSelector } from './AccountTypeSelector';
 import { SubTypeSelector } from './SubTypeSelector';
 import { DynamicAccountForm } from './DynamicAccountForm';
 import { AccountPreview } from './AccountPreview';
+import { ValidationSummary } from './ValidationSummary';
+import { CreateResultView } from './CreateResultView';
 import { useAccountCreation } from './useAccountCreation';
 
 export function CreateAccountPage() {
@@ -16,15 +18,21 @@ export function CreateAccountPage() {
     form,
     preview,
     emailValidation,
+    creationStep,
+    validationResult,
+    createResult,
     selectType,
     selectSubType,
     resetType,
+    backToForm,
     updateField,
     generatePassword,
     validateRecoveryEmail,
+    validateAndProceed,
+    confirmCreate,
   } = useAccountCreation();
 
-  // Step 1: select type
+  // ── Step 1: select type ────────────────────────────────────────────────────
   if (!selectedType) {
     return (
       <div>
@@ -47,7 +55,7 @@ export function CreateAccountPage() {
     );
   }
 
-  // Step 2 (PRIVILEGED only): select sub-type
+  // ── Step 2 (PRIVILEGED only): select sub-type ──────────────────────────────
   if (selectedType === 'PRIVILEGED' && !selectedSubType) {
     return (
       <div>
@@ -56,27 +64,7 @@ export function CreateAccountPage() {
           description="Configura y previsualiza los parámetros de la nueva cuenta antes de crearla"
         />
 
-        <div style={{
-          display:      'flex',
-          alignItems:   'center',
-          gap:          '12px',
-          padding:      '10px 16px',
-          marginBottom: '20px',
-          background:   'var(--ds-danger-light)',
-          border:       '1px solid var(--ds-danger-border)',
-          borderRadius: 'var(--ds-radius-xl)',
-        }}>
-          <span style={{
-            fontFamily: 'var(--ds-font-mono)', fontSize: '11px', fontWeight: 700,
-            background: 'var(--ds-danger-main)', color: 'white', padding: '2px 8px', borderRadius: '4px',
-          }}>
-            PRV
-          </span>
-          <span style={{ fontWeight: 600, color: 'var(--ds-neutral-800)' }}>Privilegiada</span>
-          <AppBadge variant="danger" size="sm">Privilegiada</AppBadge>
-          <div style={{ flex: 1 }} />
-          <AppButton variant="ghost" size="sm" onClick={resetType}>Cambiar tipo</AppButton>
-        </div>
+        <TypeBanner typeInfo={typeInfo} subTypeInfo={null} onReset={resetType} onChangeSubType={undefined} />
 
         <AppCard title="Sub-tipo de cuenta" description="El área funcional determina el prefijo y la OU de destino">
           <SubTypeSelector
@@ -89,8 +77,68 @@ export function CreateAccountPage() {
     );
   }
 
-  // Step 3: form + preview
   const isPrivileged = typeInfo?.isPrivileged ?? false;
+
+  // ── Step: result ─────────────────────────────────────────────────────────
+  if (creationStep === 'result' && createResult) {
+    return (
+      <div>
+        <AppPageHeader
+          title="Creación de Cuentas"
+          description={createResult.success ? 'La cuenta ha sido creada en Active Directory' : 'Error al crear la cuenta'}
+        />
+        <AppCard title={createResult.success ? 'Cuenta creada' : 'Error'}>
+          <CreateResultView result={createResult} onNewAccount={resetType} />
+        </AppCard>
+      </div>
+    );
+  }
+
+  // ── Step: validating / confirming ─────────────────────────────────────────
+  if (creationStep === 'validating' || creationStep === 'confirming' || creationStep === 'creating') {
+    return (
+      <div>
+        <AppPageHeader
+          title="Creación de Cuentas"
+          description="Verificando parámetros antes de crear la cuenta"
+        />
+
+        <TypeBanner
+          typeInfo={typeInfo}
+          subTypeInfo={subTypeInfo ?? null}
+          onReset={resetType}
+          onChangeSubType={isPrivileged ? () => selectType('PRIVILEGED') : undefined}
+        />
+
+        <AppCard title="Validación previa">
+          {(creationStep === 'validating' || creationStep === 'creating') ? (
+            <div style={{ padding: '32px', textAlign: 'center' }}>
+              <div className="ds-loading" style={{ marginBottom: '12px' }} />
+              <div style={{ color: 'var(--ds-neutral-600)', fontSize: 'var(--ds-text-sm)' }}>
+                {creationStep === 'validating'
+                  ? 'Verificando parámetros en Active Directory…'
+                  : 'Creando cuenta en Active Directory…'}
+              </div>
+            </div>
+          ) : validationResult ? (
+            <ValidationSummary
+              result={validationResult}
+              onConfirm={confirmCreate}
+              onBack={backToForm}
+            />
+          ) : null}
+        </AppCard>
+      </div>
+    );
+  }
+
+  // ── Step 3: form + preview (default) ─────────────────────────────────────
+  const isFormReady =
+    form.accountName.trim().length > 0 &&
+    form.firstName.trim().length > 0 &&
+    form.apellidos.trim().length > 0 &&
+    form.password.length > 0 &&
+    emailValidation.status === 'valid';
 
   return (
     <div>
@@ -99,62 +147,13 @@ export function CreateAccountPage() {
         description="Configura y previsualiza los parámetros de la nueva cuenta antes de crearla"
       />
 
-      {/* Selected type / subtype banner */}
-      <div style={{
-        display:      'flex',
-        alignItems:   'center',
-        gap:          '12px',
-        padding:      '10px 16px',
-        marginBottom: '20px',
-        background:   isPrivileged ? 'var(--ds-danger-light)' : 'var(--ds-brand-50)',
-        border:       `1px solid ${isPrivileged ? 'var(--ds-danger-border)' : 'var(--ds-brand-100)'}`,
-        borderRadius: 'var(--ds-radius-xl)',
-      }}>
-        <span style={{
-          fontFamily:  'var(--ds-font-mono)',
-          fontSize:    '11px',
-          fontWeight:  700,
-          background:  isPrivileged ? 'var(--ds-danger-main)' : 'var(--ds-brand-500)',
-          color:       'white',
-          padding:     '2px 8px',
-          borderRadius:'4px',
-        }}>
-          {typeInfo?.badge}
-        </span>
+      <TypeBanner
+        typeInfo={typeInfo}
+        subTypeInfo={subTypeInfo ?? null}
+        onReset={resetType}
+        onChangeSubType={isPrivileged ? () => selectType('PRIVILEGED') : undefined}
+      />
 
-        <span style={{ fontWeight: 600, color: 'var(--ds-neutral-800)' }}>
-          {typeInfo?.label}
-        </span>
-
-        {isPrivileged && subTypeInfo && (
-          <>
-            <span style={{ color: 'var(--ds-neutral-400)' }}>›</span>
-            <span style={{ fontWeight: 600, color: 'var(--ds-danger-dark)' }}>
-              {subTypeInfo.label}
-            </span>
-            <AppBadge variant="danger" size="sm">Privilegiada</AppBadge>
-            <span style={{ fontSize: 'var(--ds-text-sm)', color: 'var(--ds-neutral-500)' }}>
-              Prefijo:{' '}
-              <code style={{ fontFamily: 'var(--ds-font-mono)', fontWeight: 600 }}>
-                {subTypeInfo.samPrefix}.
-              </code>
-            </span>
-          </>
-        )}
-
-        <div style={{ flex: 1 }} />
-
-        {isPrivileged && (
-          <AppButton variant="ghost" size="sm" onClick={() => selectType('PRIVILEGED')}>
-            Cambiar sub-tipo
-          </AppButton>
-        )}
-        <AppButton variant="ghost" size="sm" onClick={resetType}>
-          Cambiar tipo
-        </AppButton>
-      </div>
-
-      {/* Form + Preview two-column layout */}
       <div style={{
         display:             'grid',
         gridTemplateColumns: '1fr 380px',
@@ -184,8 +183,9 @@ export function CreateAccountPage() {
             <AppButton
               variant="primary"
               size="md"
-              disabled
-              title="La creación de cuentas estará disponible en la siguiente fase"
+              disabled={!isFormReady}
+              onClick={validateAndProceed}
+              title={isFormReady ? undefined : 'Complete todos los campos y valide el correo de recuperación'}
             >
               Crear cuenta
             </AppButton>
@@ -194,6 +194,74 @@ export function CreateAccountPage() {
 
         <AccountPreview preview={preview} />
       </div>
+    </div>
+  );
+}
+
+// ── Internal sub-component ────────────────────────────────────────────────────
+
+interface TypeBannerProps {
+  typeInfo:        ReturnType<typeof useAccountCreation>['typeInfo'];
+  subTypeInfo:     ReturnType<typeof useAccountCreation>['subTypeInfo'] | null;
+  onReset:         () => void;
+  onChangeSubType: (() => void) | undefined;
+}
+
+function TypeBanner({ typeInfo, subTypeInfo, onReset, onChangeSubType }: TypeBannerProps) {
+  const isPrivileged = typeInfo?.isPrivileged ?? false;
+  return (
+    <div style={{
+      display:      'flex',
+      alignItems:   'center',
+      gap:          '12px',
+      padding:      '10px 16px',
+      marginBottom: '20px',
+      background:   isPrivileged ? 'var(--ds-danger-light)' : 'var(--ds-brand-50)',
+      border:       `1px solid ${isPrivileged ? 'var(--ds-danger-border)' : 'var(--ds-brand-100)'}`,
+      borderRadius: 'var(--ds-radius-xl)',
+    }}>
+      <span style={{
+        fontFamily:  'var(--ds-font-mono)',
+        fontSize:    '11px',
+        fontWeight:  700,
+        background:  isPrivileged ? 'var(--ds-danger-main)' : 'var(--ds-brand-500)',
+        color:       'white',
+        padding:     '2px 8px',
+        borderRadius:'4px',
+      }}>
+        {typeInfo?.badge}
+      </span>
+
+      <span style={{ fontWeight: 600, color: 'var(--ds-neutral-800)' }}>
+        {typeInfo?.label}
+      </span>
+
+      {isPrivileged && subTypeInfo && (
+        <>
+          <span style={{ color: 'var(--ds-neutral-400)' }}>›</span>
+          <span style={{ fontWeight: 600, color: 'var(--ds-danger-dark)' }}>
+            {subTypeInfo.label}
+          </span>
+          <AppBadge variant="danger" size="sm">Privilegiada</AppBadge>
+          <span style={{ fontSize: 'var(--ds-text-sm)', color: 'var(--ds-neutral-500)' }}>
+            Prefijo:{' '}
+            <code style={{ fontFamily: 'var(--ds-font-mono)', fontWeight: 600 }}>
+              {subTypeInfo.samPrefix}
+            </code>
+          </span>
+        </>
+      )}
+
+      <div style={{ flex: 1 }} />
+
+      {onChangeSubType && (
+        <AppButton variant="ghost" size="sm" onClick={onChangeSubType}>
+          Cambiar sub-tipo
+        </AppButton>
+      )}
+      <AppButton variant="ghost" size="sm" onClick={onReset}>
+        Cambiar tipo
+      </AppButton>
     </div>
   );
 }
