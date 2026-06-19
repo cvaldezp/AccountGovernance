@@ -68,8 +68,10 @@ export type RouteKey =
   | 'search'
   | 'user-detail'
   | 'audit'
+  | 'account-creation'
   | 'attribute-catalog'
-  | 'permissions-matrix';
+  | 'permissions-matrix'
+  | 'account-type-config';
 
 // ── Parametric field configuration ──────────────────────────────────────────
 

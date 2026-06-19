@@ -7,18 +7,22 @@ import { UserDetailPage } from './modules/users/UserDetailPage';
 import { AuditPage } from './modules/audit/AuditPage';
 import { AttributeCatalogPage } from './modules/permissions/AttributeCatalogPage';
 import { PermissionsMatrixPage } from './modules/permissions/PermissionsMatrixPage';
+import { CreateAccountPage } from './modules/account-creation/CreateAccountPage';
+import { AccountTypeConfigPage } from './modules/account-type-config/AccountTypeConfigPage';
 
 function RouterView() {
   const { currentRoute } = useRouter();
 
   switch (currentRoute) {
-    case 'dashboard': return <DashboardPage />;
-    case 'search': return <SearchUserPage />;
-    case 'user-detail': return <UserDetailPage />;
-    case 'audit': return <AuditPage />;
-    case 'attribute-catalog': return <AttributeCatalogPage />;
-    case 'permissions-matrix': return <PermissionsMatrixPage />;
-    default: return <DashboardPage />;
+    case 'dashboard':        return <DashboardPage />;
+    case 'search':           return <SearchUserPage />;
+    case 'user-detail':      return <UserDetailPage />;
+    case 'audit':            return <AuditPage />;
+    case 'account-creation': return <CreateAccountPage />;
+    case 'attribute-catalog':   return <AttributeCatalogPage />;
+    case 'permissions-matrix':  return <PermissionsMatrixPage />;
+    case 'account-type-config': return <AccountTypeConfigPage />;
+    default:                 return <DashboardPage />;
   }
 }
 

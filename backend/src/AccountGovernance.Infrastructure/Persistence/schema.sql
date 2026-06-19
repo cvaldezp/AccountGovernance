@@ -106,7 +106,161 @@ BEGIN
 END
 GO
 
--- ── 3. Seed: field definitions ────────────────────────────────────────────────
+-- ── 3. Account-creation tables ───────────────────────────────────────────────
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.tables t
+    JOIN sys.schemas s ON t.schema_id = s.schema_id
+    WHERE t.name = 'AccountTypes' AND s.name = 'gov'
+)
+BEGIN
+    CREATE TABLE gov.AccountTypes (
+        Id           INT           NOT NULL IDENTITY(1,1) PRIMARY KEY,
+        TypeKey      NVARCHAR(50)  NOT NULL,
+        Label        NVARCHAR(100) NOT NULL,
+        Description  NVARCHAR(500) NOT NULL,
+        Badge        NVARCHAR(10)  NOT NULL,
+        IsPrivileged BIT           NOT NULL DEFAULT 0,
+        IsActive     BIT           NOT NULL DEFAULT 1,
+        SortOrder    INT           NOT NULL DEFAULT 0,
+        CreatedAt    DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+        UpdatedAt    DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+        CONSTRAINT UQ_Gov_AccountTypes_TypeKey UNIQUE (TypeKey)
+    );
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.tables t
+    JOIN sys.schemas s ON t.schema_id = s.schema_id
+    WHERE t.name = 'AccountTypeConfigurations' AND s.name = 'gov'
+)
+BEGIN
+    CREATE TABLE gov.AccountTypeConfigurations (
+        Id                    INT           NOT NULL IDENTITY(1,1) PRIMARY KEY,
+        AccountTypeId         INT           NOT NULL,
+        SamPrefix             NVARCHAR(20)  NULL,           -- NULL for PRIVILEGED (prefix lives in AccountSubTypes)
+        ExtensionAttribute14  NVARCHAR(50)  NOT NULL,
+        TargetOU              NVARCHAR(500) NULL,           -- NULL for PRIVILEGED (OU lives in AccountSubTypes)
+        DefaultPasswordLength INT           NOT NULL DEFAULT 16,
+        DescriptionTemplate   NVARCHAR(500) NOT NULL DEFAULT '',
+        UpdatedAt             DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+        UpdatedBy             NVARCHAR(200) NULL,
+        CONSTRAINT FK_Gov_AccountTypeConfig_Type FOREIGN KEY (AccountTypeId)
+            REFERENCES gov.AccountTypes(Id),
+        CONSTRAINT UQ_Gov_AccountTypeConfig_TypeId UNIQUE (AccountTypeId)
+    );
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.tables t
+    JOIN sys.schemas s ON t.schema_id = s.schema_id
+    WHERE t.name = 'AccountSubTypes' AND s.name = 'gov'
+)
+BEGIN
+    CREATE TABLE gov.AccountSubTypes (
+        Id                    INT           NOT NULL IDENTITY(1,1) PRIMARY KEY,
+        AccountTypeId         INT           NOT NULL REFERENCES gov.AccountTypes(Id),
+        SubTypeKey            NVARCHAR(50)  NOT NULL,
+        Label                 NVARCHAR(100) NOT NULL,
+        SamPrefix             NVARCHAR(20)  NOT NULL,
+        ExtensionAttribute14  NVARCHAR(50)  NOT NULL,
+        TargetOU              NVARCHAR(500) NULL,
+        IsActive              BIT           NOT NULL DEFAULT 1,
+        SortOrder             INT           NOT NULL DEFAULT 0,
+        CONSTRAINT UQ_Gov_AccountSubTypes_Key UNIQUE (SubTypeKey)
+    );
+END
+GO
+
+-- ── 4. Migration: consolidate to 5 types with uppercase keys (idempotent) ─────
+
+-- Rename lowercase type keys to uppercase
+UPDATE gov.AccountTypes SET TypeKey = 'GENERIC'    WHERE TypeKey = 'generica';
+UPDATE gov.AccountTypes SET TypeKey = 'PARTNER'    WHERE TypeKey = 'partner';
+UPDATE gov.AccountTypes SET TypeKey = 'SERVICE'    WHERE TypeKey = 'service';
+UPDATE gov.AccountTypes SET TypeKey = 'EXTENSION'  WHERE TypeKey = 'extension';
+GO
+
+-- Remove old privileged sub-types (they become AccountSubTypes under the single PRIVILEGED type)
+IF EXISTS (SELECT 1 FROM gov.AccountTypes WHERE TypeKey LIKE 'privileged-%')
+BEGIN
+    DELETE atc
+    FROM   gov.AccountTypeConfigurations atc
+    INNER JOIN gov.AccountTypes at ON at.Id = atc.AccountTypeId
+    WHERE  at.TypeKey LIKE 'privileged-%';
+
+    DELETE FROM gov.AccountTypes WHERE TypeKey LIKE 'privileged-%';
+END
+GO
+
+-- ── 5. Seed: account types (5 canonical types) ───────────────────────────────
+
+IF NOT EXISTS (SELECT 1 FROM gov.AccountTypes WHERE TypeKey = 'GENERIC')
+    INSERT INTO gov.AccountTypes (TypeKey, Label, Description, Badge, IsPrivileged, IsActive, SortOrder)
+    VALUES ('GENERIC', 'Genérica', 'Cuentas de usuarios internos estándar.', 'GEN', 0, 1, 1);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM gov.AccountTypes WHERE TypeKey = 'PARTNER')
+    INSERT INTO gov.AccountTypes (TypeKey, Label, Description, Badge, IsPrivileged, IsActive, SortOrder)
+    VALUES ('PARTNER', 'Partner', 'Cuentas para socios externos o proveedores.', 'PTR', 0, 1, 2);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM gov.AccountTypes WHERE TypeKey = 'SERVICE')
+    INSERT INTO gov.AccountTypes (TypeKey, Label, Description, Badge, IsPrivileged, IsActive, SortOrder)
+    VALUES ('SERVICE', 'Servicio', 'Cuentas para servicios o aplicaciones.', 'SVC', 0, 1, 3);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM gov.AccountTypes WHERE TypeKey = 'EXTENSION')
+    INSERT INTO gov.AccountTypes (TypeKey, Label, Description, Badge, IsPrivileged, IsActive, SortOrder)
+    VALUES ('EXTENSION', 'Extensión', 'Cuentas de extensión para usuarios existentes.', 'EXT', 0, 1, 4);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM gov.AccountTypes WHERE TypeKey = 'PRIVILEGED')
+    INSERT INTO gov.AccountTypes (TypeKey, Label, Description, Badge, IsPrivileged, IsActive, SortOrder)
+    VALUES ('PRIVILEGED', 'Privilegiada', 'Cuentas privilegiadas con acceso elevado. El sub-tipo determina el prefijo y OU.', 'PRV', 1, 1, 5);
+GO
+
+-- ── 6. Seed: account type configurations ─────────────────────────────────────
+
+IF NOT EXISTS (SELECT 1 FROM gov.AccountTypeConfigurations
+               WHERE AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'GENERIC'))
+BEGIN
+    INSERT INTO gov.AccountTypeConfigurations
+        (AccountTypeId, SamPrefix, ExtensionAttribute14, TargetOU, DefaultPasswordLength, DescriptionTemplate)
+    SELECT at.Id, cfg.SamPrefix, cfg.ExtensionAttribute14, cfg.TargetOU, cfg.DefaultPasswordLength, cfg.DescriptionTemplate
+    FROM gov.AccountTypes at
+    JOIN (VALUES
+        ('GENERIC',    NULL,  'GENERICA',   'OU=Genericas,OU=Usuarios,DC=usfq,DC=edu,DC=ec',  16, 'Cuenta genérica — {Department}'),
+        ('PARTNER',    NULL,  'PARTNER',    'OU=Partners,OU=Externos,DC=usfq,DC=edu,DC=ec',   16, 'Cuenta partner — {Company}'),
+        ('SERVICE',    NULL,  'SERVICIO',   'OU=ServiceAccounts,DC=usfq,DC=edu,DC=ec',         20, 'Cuenta de servicio — {ServiceName}'),
+        ('EXTENSION',  NULL,  'EXTENSION',  'OU=Extension,OU=Usuarios,DC=usfq,DC=edu,DC=ec',  16, 'Cuenta de extensión — {Department}'),
+        ('PRIVILEGED', NULL,  'PRIVILEGED', NULL,                                              20, 'Cuenta privilegiada {SubType} — {Department}')
+    ) AS cfg(TypeKey, SamPrefix, ExtensionAttribute14, TargetOU, DefaultPasswordLength, DescriptionTemplate)
+        ON at.TypeKey = cfg.TypeKey;
+END
+GO
+
+-- ── 7. Seed: account sub-types (PRIVILEGED only) ─────────────────────────────
+
+IF NOT EXISTS (SELECT 1 FROM gov.AccountSubTypes WHERE SubTypeKey = 'OPERACIONES')
+BEGIN
+    INSERT INTO gov.AccountSubTypes
+        (AccountTypeId, SubTypeKey, Label, SamPrefix, ExtensionAttribute14, TargetOU, IsActive, SortOrder)
+    SELECT at.Id, sub.SubTypeKey, sub.Label, sub.SamPrefix, sub.ExtensionAttribute14, sub.TargetOU, 1, sub.SortOrder
+    FROM gov.AccountTypes at
+    JOIN (VALUES
+        ('OPERACIONES',    'Operaciones',    'op',    'PRIV_OP',  'OU=Privilegiadas,OU=Operaciones,DC=usfq,DC=edu,DC=ec',    1),
+        ('INFRAESTRUCTURA','Infraestructura','sa',    'PRIV_SA',  'OU=Privilegiadas,OU=Infraestructura,DC=usfq,DC=edu,DC=ec',2),
+        ('SISTEMAS',       'Sistemas',       'sys',   'PRIV_SYS', 'OU=Privilegiadas,OU=Sistemas,DC=usfq,DC=edu,DC=ec',       3),
+        ('SEGURIDAD',      'Seguridad',      'cyber', 'PRIV_CYB', 'OU=Privilegiadas,OU=Seguridad,DC=usfq,DC=edu,DC=ec',      4)
+    ) AS sub(SubTypeKey, Label, SamPrefix, ExtensionAttribute14, TargetOU, SortOrder)
+        ON at.TypeKey = 'PRIVILEGED';
+END
+GO
+
+-- ── 5. Seed: field definitions ────────────────────────────────────────────────
 
 IF NOT EXISTS (SELECT 1 FROM gov.FieldDefinitions WHERE FieldKey = 'field-ext-email')
 BEGIN
