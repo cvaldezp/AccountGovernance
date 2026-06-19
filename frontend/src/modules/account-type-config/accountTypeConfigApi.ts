@@ -23,6 +23,7 @@ export interface AccountTypeConfigItem {
   targetOU:              string | null;
   defaultPasswordLength: number;
   descriptionTemplate:   string;
+  defaultCompany:        string | null;
   updatedAt:             string;
   updatedBy:             string | null;
   subTypes:              AccountSubTypeConfigItem[];
@@ -34,6 +35,7 @@ export interface UpdateConfigPayload {
   targetOU:              string | null;
   defaultPasswordLength: number;
   descriptionTemplate:   string;
+  defaultCompany:        string | null;
   isActive:              boolean;
 }
 
@@ -57,36 +59,36 @@ const MOCK_CONFIGS: AccountTypeConfigItem[] = [
   {
     id: 1, typeKey: 'GENERIC',    label: 'Genérica',    description: 'Cuentas de usuarios internos estándar.',
     badge: 'GEN', isPrivileged: false, isActive: true, sortOrder: 1,
-    samPrefix: null, extensionAttribute14: 'GENERICA',  targetOU: 'OU=Genericas,OU=Usuarios,DC=usfq,DC=edu,DC=ec',
-    defaultPasswordLength: 16, descriptionTemplate: 'Cuenta genérica — {Department}',
+    samPrefix: null, extensionAttribute14: 'Genérica',  targetOU: 'OU=Genericas,OU=Usuarios,DC=usfq,DC=edu,DC=ec',
+    defaultPasswordLength: 16, descriptionTemplate: 'Genérica', defaultCompany: 'USFQ',
     updatedAt: new Date().toISOString(), updatedBy: null, subTypes: [],
   },
   {
     id: 2, typeKey: 'PARTNER',    label: 'Partner',     description: 'Cuentas para socios externos o proveedores.',
     badge: 'PTR', isPrivileged: false, isActive: true, sortOrder: 2,
-    samPrefix: null, extensionAttribute14: 'PARTNER',   targetOU: 'OU=Partners,OU=Externos,DC=usfq,DC=edu,DC=ec',
-    defaultPasswordLength: 16, descriptionTemplate: 'Cuenta partner — {Company}',
+    samPrefix: null, extensionAttribute14: 'PARTNERS',  targetOU: 'OU=Partners,OU=Externos,DC=usfq,DC=edu,DC=ec',
+    defaultPasswordLength: 16, descriptionTemplate: 'PARTNERS', defaultCompany: 'USFQ',
     updatedAt: new Date().toISOString(), updatedBy: null, subTypes: [],
   },
   {
     id: 3, typeKey: 'SERVICE',    label: 'Servicio',    description: 'Cuentas para servicios o aplicaciones.',
     badge: 'SVC', isPrivileged: false, isActive: true, sortOrder: 3,
-    samPrefix: null, extensionAttribute14: 'SERVICIO',  targetOU: 'OU=ServiceAccounts,DC=usfq,DC=edu,DC=ec',
-    defaultPasswordLength: 20, descriptionTemplate: 'Cuenta de servicio — {ServiceName}',
+    samPrefix: null, extensionAttribute14: 'SERVICES',  targetOU: 'OU=ServiceAccounts,DC=usfq,DC=edu,DC=ec',
+    defaultPasswordLength: 20, descriptionTemplate: 'SERVICES', defaultCompany: 'USFQ',
     updatedAt: new Date().toISOString(), updatedBy: null, subTypes: [],
   },
   {
     id: 4, typeKey: 'EXTENSION',  label: 'Extensión',   description: 'Cuentas de extensión para usuarios existentes.',
     badge: 'EXT', isPrivileged: false, isActive: true, sortOrder: 4,
     samPrefix: null, extensionAttribute14: 'EXTENSION', targetOU: 'OU=Extension,OU=Usuarios,DC=usfq,DC=edu,DC=ec',
-    defaultPasswordLength: 16, descriptionTemplate: 'Cuenta de extensión — {Department}',
+    defaultPasswordLength: 16, descriptionTemplate: 'EXTENSION', defaultCompany: 'USFQ',
     updatedAt: new Date().toISOString(), updatedBy: null, subTypes: [],
   },
   {
     id: 5, typeKey: 'PRIVILEGED', label: 'Privilegiada', description: 'Cuentas privilegiadas con acceso elevado.',
     badge: 'PRV', isPrivileged: true,  isActive: true, sortOrder: 5,
     samPrefix: null, extensionAttribute14: 'PRIVILEGED', targetOU: null,
-    defaultPasswordLength: 20, descriptionTemplate: 'Cuenta privilegiada {SubType} — {Department}',
+    defaultPasswordLength: 20, descriptionTemplate: 'PRIVILEGED', defaultCompany: 'USFQ',
     updatedAt: new Date().toISOString(), updatedBy: null, subTypes: MOCK_SUBTYPES,
   },
 ];

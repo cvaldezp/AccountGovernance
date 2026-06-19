@@ -62,10 +62,13 @@ export function AccountPreview({ preview }: Props) {
       ) : (
         <>
           <div style={{ marginBottom: '4px' }}>
-            <AttributeRow label="userPrincipalName"    value={preview.userPrincipalName}    mono />
-            <AttributeRow label="sAMAccountName"       value={preview.sAMAccountName}       mono />
-            <AttributeRow label="displayName"          value={preview.displayName} />
-            <AttributeRow label="description"          value={preview.description} />
+            <AttributeRow label="userPrincipalName" value={preview.userPrincipalName} mono />
+            <AttributeRow label="sAMAccountName"    value={preview.sAMAccountName}    mono />
+            <AttributeRow label="displayName"       value={preview.displayName} />
+            {preview.company && (
+              <AttributeRow label="company" value={preview.company} />
+            )}
+            <AttributeRow label="description" value={preview.description} />
             <div style={{
               display:      'grid',
               gridTemplateColumns: '175px 1fr',

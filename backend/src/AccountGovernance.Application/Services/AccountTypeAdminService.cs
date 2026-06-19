@@ -63,6 +63,7 @@ public sealed class AccountTypeAdminService(IAccountTypeRepository repo) : IAcco
         v.TargetOU,
         v.DefaultPasswordLength,
         v.DescriptionTemplate,
+        v.DefaultCompany,
         v.ConfigUpdatedAt,
         v.ConfigUpdatedBy,
         v.SubTypes.Select(ToSubTypeDto).ToList()

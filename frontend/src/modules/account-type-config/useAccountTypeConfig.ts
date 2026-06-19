@@ -8,6 +8,7 @@ export interface EditForm {
   targetOU:              string;
   defaultPasswordLength: number;
   descriptionTemplate:   string;
+  defaultCompany:        string;
   isActive:              boolean;
 }
 
@@ -25,6 +26,7 @@ function toEditForm(item: AccountTypeConfigItem): EditForm {
     targetOU:              item.targetOU ?? '',
     defaultPasswordLength: item.defaultPasswordLength,
     descriptionTemplate:   item.descriptionTemplate,
+    defaultCompany:        item.defaultCompany ?? '',
     isActive:              item.isActive,
   };
 }
@@ -36,6 +38,7 @@ function toPayload(form: EditForm): UpdateConfigPayload {
     targetOU:              form.targetOU.trim() || null,
     defaultPasswordLength: form.defaultPasswordLength,
     descriptionTemplate:   form.descriptionTemplate.trim(),
+    defaultCompany:        form.defaultCompany.trim() || null,
     isActive:              form.isActive,
   };
 }

@@ -210,6 +210,13 @@ export function AccountTypeConfigPage() {
                         />
                       </div>
                     )}
+                    <AppInput
+                      label="Empresa por defecto"
+                      placeholder="ej. USFQ (vacío = sin empresa)"
+                      value={editForm.defaultCompany}
+                      onChange={e => updateEditField('defaultCompany', e.target.value)}
+                      hint="Para cuentas genéricas — se muestra en el preview como Company"
+                    />
                     <div className="ds-input" style={{ gridColumn: 'span 2' }}>
                       <label className="ds-input__label">Plantilla de descripción</label>
                       <textarea
@@ -220,7 +227,7 @@ export function AccountTypeConfigPage() {
                         onChange={e => updateEditField('descriptionTemplate', e.target.value)}
                       />
                       <span className="ds-input__hint">
-                        Variables: {'{Department}'} {'{Company}'} {'{ServiceName}'} {'{SubType}'}
+                        Variable disponible: {'{SubType}'} (solo para tipo Privilegiada)
                       </span>
                     </div>
                   </div>

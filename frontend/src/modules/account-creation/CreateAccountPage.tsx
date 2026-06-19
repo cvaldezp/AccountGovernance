@@ -163,7 +163,6 @@ export function CreateAccountPage() {
       }}>
         <AppCard title="Datos de la cuenta">
           <DynamicAccountForm
-            typeKey={selectedType}
             form={form}
             emailValidation={emailValidation}
             onFieldChange={updateField}

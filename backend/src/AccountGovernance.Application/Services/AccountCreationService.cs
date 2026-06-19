@@ -22,6 +22,8 @@ public sealed partial class AccountCreationService(IAccountTypeRepository accoun
             v.ExtensionAttribute14,
             v.IsPrivileged,
             v.DefaultPasswordLength,
+            v.DefaultCompany,
+            v.DescriptionTemplate,
             v.SubTypes.Select(s => new AccountSubTypeDto(
                 s.SubTypeKey, s.Label, s.SamPrefix, s.ExtensionAttribute14, s.TargetOU, s.IsActive
             )).ToList()
@@ -59,9 +61,7 @@ public sealed partial class AccountCreationService(IAccountTypeRepository accoun
             return Result<AccountPreviewResponseDto>.Fail(
                 "Tipo de cuenta no válido.", "INVALID_ACCOUNT_TYPE");
 
-        string? samPrefix            = null;
-        string  extensionAttribute14 = view.ExtensionAttribute14;
-        string? subTypeLabel         = null;
+        string? samPrefix = null;
 
         if (view.IsPrivileged)
         {
@@ -74,22 +74,20 @@ public sealed partial class AccountCreationService(IAccountTypeRepository accoun
                 return Result<AccountPreviewResponseDto>.Fail(
                     "Sub-tipo no válido.", "INVALID_SUBTYPE");
 
-            samPrefix            = subType.SamPrefix;
-            extensionAttribute14 = subType.ExtensionAttribute14;
-            subTypeLabel         = subType.Label;
+            samPrefix = subType.SamPrefix;
         }
 
         var sam         = ComputeSam(request, samPrefix);
         var displayName = ComputeDisplayName(request);
-        var description = request.AccountTypeKey == "SERVICE"
-                          && !string.IsNullOrWhiteSpace(request.Description)
-                              ? request.Description!
-                              : ApplyTemplate(view.DescriptionTemplate, request, subTypeLabel);
+        var company     = view.DefaultCompany ?? "USFQ";
+        var description = view.DescriptionTemplate;
+        var extensionAttribute14 = view.ExtensionAttribute14;
 
         return Result<AccountPreviewResponseDto>.Ok(new AccountPreviewResponseDto(
             UserPrincipalName:    $"{sam}@{AdDomain}",
             SamAccountName:       sam,
             DisplayName:          displayName,
+            Company:              company,
             Description:          description,
             ExtensionAttribute14: extensionAttribute14
         ));
@@ -99,33 +97,15 @@ public sealed partial class AccountCreationService(IAccountTypeRepository accoun
 
     private static string ComputeSam(AccountPreviewRequestDto req, string? samPrefix)
     {
-        if (req.AccountTypeKey == "SERVICE")
-            return $"svc_{Ascii(req.ServiceName ?? "servicio")}";
-
-        var first = Ascii(req.FirstName ?? string.Empty);
-        var last  = Ascii(req.LastName1 ?? string.Empty);
-        var base_ = first.Length > 0 ? $"{first[0]}{last}" : last;
-
-        return samPrefix is not null ? $"{samPrefix}.{base_}" : base_;
+        var cuenta = Ascii(req.AccountName ?? string.Empty);
+        return samPrefix is not null ? $"{samPrefix}{cuenta}" : cuenta;
     }
 
     private static string ComputeDisplayName(AccountPreviewRequestDto req)
-    {
-        if (req.AccountTypeKey == "SERVICE")
-            return $"SVC - {req.ServiceName?.Trim() ?? "Servicio"}";
-
-        return string.Join(" ",
-            new[] { req.FirstName, req.LastName1, req.LastName2 }
+        => string.Join(" ",
+            new[] { req.FirstName, req.Apellidos }
                 .Where(p => !string.IsNullOrWhiteSpace(p))
                 .Select(p => p!.Trim()));
-    }
-
-    private static string ApplyTemplate(string template, AccountPreviewRequestDto req, string? subTypeLabel)
-        => template
-            .Replace("{Department}",  req.Department  ?? "Sin departamento")
-            .Replace("{Company}",     req.Company     ?? "Sin empresa")
-            .Replace("{ServiceName}", req.ServiceName ?? "Servicio")
-            .Replace("{SubType}",     subTypeLabel    ?? string.Empty);
 
     [GeneratedRegex(@"[^a-z0-9]")]
     private static partial Regex NonAlphanumericRegex();

@@ -6,5 +6,6 @@ public sealed record UpdateAccountTypeConfigDto(
     string?  TargetOU,
     int      DefaultPasswordLength,
     string   DescriptionTemplate,
+    string?  DefaultCompany,
     bool     IsActive
 );

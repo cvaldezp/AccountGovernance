@@ -8,5 +8,7 @@ public sealed record AccountTypeDto(
     string   ExtensionAttribute14,
     bool     IsPrivileged,
     int      DefaultPasswordLength,
+    string?  DefaultCompany,
+    string   DescriptionTemplate,
     IReadOnlyList<AccountSubTypeDto> SubTypes
 );

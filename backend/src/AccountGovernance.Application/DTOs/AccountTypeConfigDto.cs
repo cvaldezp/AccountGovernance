@@ -14,6 +14,7 @@ public sealed record AccountTypeConfigDto(
     string?  TargetOU,
     int      DefaultPasswordLength,
     string   DescriptionTemplate,
+    string?  DefaultCompany,
     DateTime UpdatedAt,
     string?  UpdatedBy,
     IReadOnlyList<AccountSubTypeDto> SubTypes

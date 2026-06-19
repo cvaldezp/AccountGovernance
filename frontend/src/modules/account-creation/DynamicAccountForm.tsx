@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { AppInput, AppButton } from '../../shared/ui';
-import type { AccountTypeKey, AccountFormData, RecoveryEmailValidation } from './types';
+import type { AccountFormData, RecoveryEmailValidation } from './types';
 
 const PASSWORD_LENGTHS = [12, 14, 16, 20, 24, 32];
 
 interface Props {
-  typeKey:         AccountTypeKey;
   form:            AccountFormData;
   emailValidation: RecoveryEmailValidation;
   onFieldChange:   <K extends keyof AccountFormData>(key: K, value: AccountFormData[K]) => void;
@@ -29,11 +28,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-const isService    = (k: AccountTypeKey) => k === 'SERVICE';
-const isPartner    = (k: AccountTypeKey) => k === 'PARTNER';
-
 export function DynamicAccountForm({
-  typeKey,
   form,
   emailValidation,
   onFieldChange,
@@ -48,68 +43,28 @@ export function DynamicAccountForm({
       {/* ── Identidad ───────────────────────────────────────────────────── */}
       <SectionLabel>Identidad</SectionLabel>
 
-      {isService(typeKey) ? (
-        <AppInput
-          label="Nombre del servicio *"
-          placeholder="ej. svc-ldap-sync"
-          value={form.serviceName}
-          onChange={e => onFieldChange('serviceName', e.target.value)}
-        />
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-          <AppInput
-            label="Primer nombre *"
-            placeholder="ej. Juan"
-            value={form.firstName}
-            onChange={e => onFieldChange('firstName', e.target.value)}
-          />
-          <AppInput
-            label="Primer apellido *"
-            placeholder="ej. Pérez"
-            value={form.lastName1}
-            onChange={e => onFieldChange('lastName1', e.target.value)}
-          />
-          <AppInput
-            label="Segundo apellido"
-            placeholder="ej. García"
-            value={form.lastName2}
-            onChange={e => onFieldChange('lastName2', e.target.value)}
-            style={{ gridColumn: 'span 2' }}
-          />
-        </div>
-      )}
-
-      {/* ── Organización ────────────────────────────────────────────────── */}
-      <SectionLabel>Organización</SectionLabel>
-
-      {isPartner(typeKey) && (
-        <AppInput
-          label="Empresa *"
-          placeholder="ej. Acme Corp."
-          value={form.company}
-          onChange={e => onFieldChange('company', e.target.value)}
-        />
-      )}
-
       <AppInput
-        label="Departamento *"
-        placeholder="ej. Tecnología"
-        value={form.department}
-        onChange={e => onFieldChange('department', e.target.value)}
+        label="Cuenta *"
+        placeholder="ej. jperez"
+        value={form.accountName}
+        onChange={e => onFieldChange('accountName', e.target.value)}
+        hint="El técnico asigna la cuenta. Desde aquí se generan el UPN y el sAMAccountName."
       />
 
-      {isService(typeKey) && (
-        <div className="ds-input">
-          <label className="ds-input__label">Descripción</label>
-          <textarea
-            className="ds-input__field"
-            placeholder="Descripción del servicio o aplicación"
-            rows={3}
-            value={form.description}
-            onChange={e => onFieldChange('description', e.target.value)}
-          />
-        </div>
-      )}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+        <AppInput
+          label="Primer nombre *"
+          placeholder="ej. Juan"
+          value={form.firstName}
+          onChange={e => onFieldChange('firstName', e.target.value)}
+        />
+        <AppInput
+          label="Apellidos *"
+          placeholder="ej. Pérez García"
+          value={form.apellidos}
+          onChange={e => onFieldChange('apellidos', e.target.value)}
+        />
+      </div>
 
       {/* ── Correo de recuperación ───────────────────────────────────────── */}
       <SectionLabel>Correo de recuperación</SectionLabel>

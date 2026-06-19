@@ -6,28 +6,28 @@ Este documento describe el flujo de trabajo para la creación de cuentas en Acti
 
 ## Tipos de cuenta soportados
 
-| Tipo                    | Clave              | Prefijo SAM | extensionAttribute14 | Privilegiada |
-|-------------------------|--------------------|-------------|----------------------|:------------:|
-| Genérica                | `generica`         | —           | `GENERICA`           | No           |
-| Partner                 | `partner`          | —           | `PARTNER`            | No           |
-| Servicio                | `service`          | `svc_`      | `SERVICIO`           | No           |
-| Extensión               | `extension`        | —           | `EXTENSION`          | No           |
-| Privilegiada Operaciones| `privileged-op`    | `op.`       | `PRIV_OP`            | Sí           |
-| Privilegiada Infraestructura | `privileged-sa` | `sa.`      | `PRIV_SA`            | Sí           |
-| Privilegiada Sist. Producción | `privileged-sys` | `sys.`  | `PRIV_SYS`           | Sí           |
-| Privilegiada Seguridad  | `privileged-cyber` | `cyber.`    | `PRIV_CYB`           | Sí           |
+| Tipo         | Clave        | Sub-tipos              | sAMAccountName           | description   | extensionAttribute14 |
+|--------------|--------------|------------------------|--------------------------|---------------|----------------------|
+| Genérica     | `GENERIC`    | —                      | `{cuenta}`               | `Genérica`    | `Genérica`           |
+| Partner      | `PARTNER`    | —                      | `{cuenta}`               | `PARTNERS`    | `PARTNERS`           |
+| Servicio     | `SERVICE`    | —                      | `{cuenta}`               | `SERVICES`    | `SERVICES`           |
+| Extensión    | `EXTENSION`  | —                      | `{cuenta}`               | `EXTENSION`   | `EXTENSION`          |
+| Privilegiada | `PRIVILEGED` | OPERACIONES (`op`)     | `op{cuenta}`             | `PRIVILEGED`  | `PRIVILEGED`         |
+|              |              | INFRAESTRUCTURA (`sa`) | `sa{cuenta}`             | `PRIVILEGED`  | `PRIVILEGED`         |
+|              |              | SISTEMAS (`sys`)       | `sys{cuenta}`            | `PRIVILEGED`  | `PRIVILEGED`         |
+|              |              | SEGURIDAD (`cyber`)    | `cyber{cuenta}`          | `PRIVILEGED`  | `PRIVILEGED`         |
 
-## Reglas de generación de atributos
+## Reglas globales de generación de atributos
+
+### Campo "Cuenta" (siempre ingresado por el técnico)
+
+Para todos los tipos de cuenta el técnico ingresa manualmente el valor del campo **Cuenta** (p. ej. `jperez`). Este campo es la única fuente del sAMAccountName y el UPN. El valor se normaliza a minúsculas ASCII sin tildes ni caracteres especiales.
 
 ### sAMAccountName
 
-- **Cuentas personales** (genérica, partner, extensión, privilegiadas):  
-  `[prefijo.]` + primera letra del nombre + apellido1 — en minúsculas, sin tildes, sin caracteres especiales.  
-  Ejemplo: `Juan Pérez` → `jperez` / `op.jperez`
-
-- **Cuentas de servicio**:  
-  `svc_` + nombre del servicio normalizado.  
-  Ejemplo: `LDAP Sync` → `svc_ldapsync`
+- **GENERIC / PARTNER / SERVICE / EXTENSION**: `{cuenta}` (valor normalizado)
+- **PRIVILEGED**: `{prefijo}{cuenta}` — el prefijo proviene del sub-tipo, concatenado directamente sin punto
+  - Ejemplo: prefijo `sa` + cuenta `prueba` → `saprueba`
 
 ### userPrincipalName
 
@@ -35,22 +35,39 @@ Este documento describe el flujo de trabajo para la creación de cuentas en Acti
 
 ### displayName
 
-- Cuentas personales: `Primer Nombre + Apellido1 [+ Apellido2]` (no se incluye job title ni foto)
-- Cuentas de servicio: `SVC - {NombreServicio}`
+`{Primer Nombre} {Apellidos}` — campo único de apellidos (sin división primer/segundo apellido)
 
-### description
+### company
 
-Generada automáticamente según el tipo:
+`USFQ` para todos los tipos — valor configurable en `gov.AccountTypeConfigurations.DefaultCompany`
 
-- Genérica: `Cuenta genérica — {Departamento}`
-- Partner: `Cuenta partner — {Empresa}`
-- Servicio: descripción ingresada por el usuario o `Cuenta de servicio — {NombreServicio}`
-- Extensión: `Cuenta de extensión — {Departamento}`
-- Privilegiadas: `Cuenta privilegiada {Tipo} — {Departamento}`
+### description y extensionAttribute14
 
-### extensionAttribute14
+Ambos valores son estáticos y provienen de `gov.AccountTypeConfigurations`. El sub-tipo de PRIVILEGED solo influye en el sAMAccountName, no en description ni EA14.
 
-Código de tipo de cuenta (ver tabla arriba). Usado para clasificación y filtrado en AD.
+| Tipo         | description  | extensionAttribute14 |
+|--------------|--------------|----------------------|
+| GENERIC      | `Genérica`   | `Genérica`           |
+| PARTNER      | `PARTNERS`   | `PARTNERS`           |
+| SERVICE      | `SERVICES`   | `SERVICES`           |
+| EXTENSION    | `EXTENSION`  | `EXTENSION`          |
+| PRIVILEGED   | `PRIVILEGED` | `PRIVILEGED`         |
+
+---
+
+## Campos del formulario
+
+El formulario es **uniforme para todos los tipos** de cuenta:
+
+| Campo                   | Notas                                        |
+|-------------------------|----------------------------------------------|
+| Cuenta *                | Ingresado por el técnico; fuente de UPN y SAM|
+| Primer nombre *         |                                              |
+| Apellidos *             | Campo único (sin división)                   |
+| Correo de recuperación *| Validado contra AD                           |
+| Contraseña              | Generada en el navegador con CSPRNG          |
+
+No hay campos de Departamento, Empresa, ni Descripción — todos provienen de la configuración del tipo.
 
 ---
 
@@ -61,27 +78,28 @@ flowchart TD
     A([Inicio]) --> B[Seleccionar tipo de cuenta]
     B --> C{Tipo seleccionado}
 
-    C -->|Genérica / Partner / Extensión| D[Formulario: Nombre, Apellidos, Departamento]
-    C -->|Servicio| E[Formulario: Nombre servicio, Departamento, Descripción]
-    C -->|Privilegiada| F[Formulario: Nombre, Apellidos, Departamento]
+    C -->|PRIVILEGED| P[Seleccionar sub-tipo\nOPERACIONES / INFRAESTRUCTURA\nSISTEMAS / SEGURIDAD]
+    P --> F
 
-    D & E & F --> G[Ingresar correo de recuperación]
+    C -->|Cualquier tipo| F[Formulario:\nCuenta, Primer Nombre, Apellidos]
 
+    F --> G[Ingresar correo de recuperación]
     G --> H[Botón: Validar correo recuperación]
     H --> I{POST /api/accounts/validate-recovery-email}
     I -->|Usuario encontrado en AD| J[✓ Correo válido]
     I -->|No encontrado| K[✗ Correo no encontrado]
 
-    G --> L[Seleccionar longitud de contraseña\ndefault: 16 caracteres]
+    F --> L[Seleccionar longitud de contraseña]
     L --> M[Botón: Generar contraseña]
     M --> N[Contraseña segura generada\nen el navegador]
 
-    D & E & F --> O[Vista previa calculada en tiempo real]
-    O --> P[userPrincipalName]
-    O --> Q[sAMAccountName]
-    O --> R[displayName]
-    O --> S[description]
-    O --> T[extensionAttribute14]
+    F --> O[Vista previa en tiempo real]
+    O --> O1[userPrincipalName]
+    O --> O2[sAMAccountName]
+    O --> O3[displayName]
+    O --> O4[company = USFQ]
+    O --> O5[description]
+    O --> O6[extensionAttribute14]
 
     J & N --> U{Formulario completo?}
     U -->|Sí| V[POST /api/accounts/preview\nValidación servidor]
@@ -99,18 +117,32 @@ flowchart TD
 
 ### `GET /api/account-types`
 
-Devuelve la lista de tipos de cuenta soportados con sus metadatos (prefijo, extensionAttribute14, etc.).
+Devuelve los tipos de cuenta con metadatos, template de descripción y sub-tipos.
 
 **Respuesta:**
 ```json
 [
   {
-    "key": "generica",
+    "key": "GENERIC",
     "label": "Genérica",
-    "description": "Cuentas de usuarios internos estándar.",
-    "prefix": null,
-    "extensionAttribute14": "GENERICA",
-    "isPrivileged": false
+    "extensionAttribute14": "Genérica",
+    "isPrivileged": false,
+    "defaultPasswordLength": 16,
+    "defaultCompany": "USFQ",
+    "descriptionTemplate": "Genérica",
+    "subTypes": []
+  },
+  {
+    "key": "PRIVILEGED",
+    "label": "Privilegiada",
+    "extensionAttribute14": "PRIVILEGED",
+    "isPrivileged": true,
+    "defaultPasswordLength": 20,
+    "defaultCompany": "USFQ",
+    "descriptionTemplate": "Cuenta privilegiada {SubType}",
+    "subTypes": [
+      { "subTypeKey": "OPERACIONES", "label": "Operaciones", "samPrefix": "op", "extensionAttribute14": "PRIV_OP" }
+    ]
   }
 ]
 ```
@@ -126,11 +158,7 @@ Valida que el correo de recuperación corresponda a un usuario existente en AD.
 
 **Response:**
 ```json
-{
-  "isValid": true,
-  "message": "Usuario encontrado en AD: Juan Perez",
-  "userDisplayName": "Juan Perez"
-}
+{ "isValid": true, "message": "Usuario encontrado en AD: Juan Perez", "userDisplayName": "Juan Perez" }
 ```
 
 ### `POST /api/accounts/preview`
@@ -140,22 +168,23 @@ Calcula los atributos AD que se asignarían a la nueva cuenta **sin crearla**.
 **Request:**
 ```json
 {
-  "accountTypeKey": "privileged-op",
-  "firstName":  "Juan",
-  "lastName1":  "Pérez",
-  "lastName2":  "García",
-  "department": "Operaciones TI"
+  "accountTypeKey": "PRIVILEGED",
+  "subTypeKey":     "OPERACIONES",
+  "accountName":    "jperez",
+  "firstName":      "Juan",
+  "apellidos":      "Pérez García"
 }
 ```
 
 **Response:**
 ```json
 {
-  "userPrincipalName":    "op.jperez@usfq.edu.ec",
-  "samAccountName":       "op.jperez",
+  "userPrincipalName":    "opjperez@usfq.edu.ec",
+  "samAccountName":       "opjperez",
   "displayName":          "Juan Pérez García",
-  "description":          "Cuenta privilegiada Operaciones — Operaciones TI",
-  "extensionAttribute14": "PRIV_OP"
+  "company":              "USFQ",
+  "description":          "PRIVILEGED",
+  "extensionAttribute14": "PRIVILEGED"
 }
 ```
 
@@ -165,6 +194,8 @@ Calcula los atributos AD que se asignarían a la nueva cuenta **sin crearla**.
 
 - **Fase 1 (actual):** Visual y configuración — no crea cuentas en AD.
 - **Fase 2 (pendiente):** Llamada real al AD Gateway para creación, asignación de grupos base, notificaciones.
-- El botón "Crear cuenta" está deshabilitado hasta que se implemente la fase 2.
+- El campo **Cuenta** es siempre ingresado por el técnico para todos los tipos. Nunca se deriva del nombre o apellido.
 - La contraseña se genera en el navegador con `crypto.getRandomValues` (CSPRNG).
 - La validación del correo de recuperación usa un mock que acepta cualquier dirección `@usfq.edu.ec`.
+- `Company = USFQ` se aplica a todos los tipos; configurable por tipo en `gov.AccountTypeConfigurations.DefaultCompany`.
+- La única variable de plantilla activa en `DescriptionTemplate` es `{SubType}`.

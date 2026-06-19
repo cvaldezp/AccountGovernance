@@ -144,6 +144,7 @@ BEGIN
         TargetOU              NVARCHAR(500) NULL,           -- NULL for PRIVILEGED (OU lives in AccountSubTypes)
         DefaultPasswordLength INT           NOT NULL DEFAULT 16,
         DescriptionTemplate   NVARCHAR(500) NOT NULL DEFAULT '',
+        DefaultCompany        NVARCHAR(200) NULL,           -- Fixed company for types like GENERIC ('USFQ')
         UpdatedAt             DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
         UpdatedBy             NVARCHAR(200) NULL,
         CONSTRAINT FK_Gov_AccountTypeConfig_Type FOREIGN KEY (AccountTypeId)
@@ -174,7 +175,16 @@ BEGIN
 END
 GO
 
--- ── 4. Migration: consolidate to 5 types with uppercase keys (idempotent) ─────
+-- ── 4a. Migration: add DefaultCompany column if missing (idempotent) ──────────
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.columns
+    WHERE  object_id = OBJECT_ID('gov.AccountTypeConfigurations') AND name = 'DefaultCompany'
+)
+    ALTER TABLE gov.AccountTypeConfigurations ADD DefaultCompany NVARCHAR(200) NULL;
+GO
+
+-- ── 4b. Migration: consolidate to 5 types with uppercase keys (idempotent) ────
 
 -- Rename lowercase type keys to uppercase
 UPDATE gov.AccountTypes SET TypeKey = 'GENERIC'    WHERE TypeKey = 'generica';
@@ -228,18 +238,55 @@ IF NOT EXISTS (SELECT 1 FROM gov.AccountTypeConfigurations
                WHERE AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'GENERIC'))
 BEGIN
     INSERT INTO gov.AccountTypeConfigurations
-        (AccountTypeId, SamPrefix, ExtensionAttribute14, TargetOU, DefaultPasswordLength, DescriptionTemplate)
-    SELECT at.Id, cfg.SamPrefix, cfg.ExtensionAttribute14, cfg.TargetOU, cfg.DefaultPasswordLength, cfg.DescriptionTemplate
+        (AccountTypeId, SamPrefix, ExtensionAttribute14, TargetOU, DefaultPasswordLength, DescriptionTemplate, DefaultCompany)
+    SELECT at.Id, cfg.SamPrefix, cfg.ExtensionAttribute14, cfg.TargetOU, cfg.DefaultPasswordLength, cfg.DescriptionTemplate, cfg.DefaultCompany
     FROM gov.AccountTypes at
     JOIN (VALUES
-        ('GENERIC',    NULL,  'GENERICA',   'OU=Genericas,OU=Usuarios,DC=usfq,DC=edu,DC=ec',  16, 'Cuenta genérica — {Department}'),
-        ('PARTNER',    NULL,  'PARTNER',    'OU=Partners,OU=Externos,DC=usfq,DC=edu,DC=ec',   16, 'Cuenta partner — {Company}'),
-        ('SERVICE',    NULL,  'SERVICIO',   'OU=ServiceAccounts,DC=usfq,DC=edu,DC=ec',         20, 'Cuenta de servicio — {ServiceName}'),
-        ('EXTENSION',  NULL,  'EXTENSION',  'OU=Extension,OU=Usuarios,DC=usfq,DC=edu,DC=ec',  16, 'Cuenta de extensión — {Department}'),
-        ('PRIVILEGED', NULL,  'PRIVILEGED', NULL,                                              20, 'Cuenta privilegiada {SubType} — {Department}')
-    ) AS cfg(TypeKey, SamPrefix, ExtensionAttribute14, TargetOU, DefaultPasswordLength, DescriptionTemplate)
+        ('GENERIC',    NULL, N'Genérica',  'OU=Genericas,OU=Usuarios,DC=usfq,DC=edu,DC=ec',  16, N'Genérica',  N'USFQ'),
+        ('PARTNER',    NULL,  'PARTNERS',  'OU=Partners,OU=Externos,DC=usfq,DC=edu,DC=ec',   16, 'PARTNERS',   N'USFQ'),
+        ('SERVICE',    NULL,  'SERVICES',  'OU=ServiceAccounts,DC=usfq,DC=edu,DC=ec',         20, 'SERVICES',   N'USFQ'),
+        ('EXTENSION',  NULL,  'EXTENSION', 'OU=Extension,OU=Usuarios,DC=usfq,DC=edu,DC=ec',  16, 'EXTENSION',  N'USFQ'),
+        ('PRIVILEGED', NULL,  'PRIVILEGED', NULL,                                             20, 'PRIVILEGED', N'USFQ')
+    ) AS cfg(TypeKey, SamPrefix, ExtensionAttribute14, TargetOU, DefaultPasswordLength, DescriptionTemplate, DefaultCompany)
         ON at.TypeKey = cfg.TypeKey;
 END
+GO
+
+-- ── Migration: fix all config values for existing installs ───────────────────
+
+UPDATE gov.AccountTypeConfigurations
+SET    ExtensionAttribute14 = N'Genérica',
+       DescriptionTemplate  = N'Genérica',
+       DefaultCompany       = N'USFQ'
+WHERE  AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'GENERIC');
+GO
+
+UPDATE gov.AccountTypeConfigurations
+SET    ExtensionAttribute14 = 'PARTNERS',
+       DescriptionTemplate  = 'PARTNERS',
+       DefaultCompany       = N'USFQ'
+WHERE  AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'PARTNER');
+GO
+
+UPDATE gov.AccountTypeConfigurations
+SET    ExtensionAttribute14 = 'SERVICES',
+       DescriptionTemplate  = 'SERVICES',
+       DefaultCompany       = N'USFQ'
+WHERE  AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'SERVICE');
+GO
+
+UPDATE gov.AccountTypeConfigurations
+SET    ExtensionAttribute14 = 'EXTENSION',
+       DescriptionTemplate  = 'EXTENSION',
+       DefaultCompany       = N'USFQ'
+WHERE  AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'EXTENSION');
+GO
+
+UPDATE gov.AccountTypeConfigurations
+SET    ExtensionAttribute14 = 'PRIVILEGED',
+       DescriptionTemplate  = 'PRIVILEGED',
+       DefaultCompany       = N'USFQ'
+WHERE  AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'PRIVILEGED');
 GO
 
 -- ── 7. Seed: account sub-types (PRIVILEGED only) ─────────────────────────────

@@ -5,24 +5,29 @@ import type { AccountTypeInfo, AccountTypeKey, AccountSubTypeInfo, AccountSubTyp
 
 const MOCK_ACCOUNT_TYPES: AccountTypeInfo[] = [
   {
-    key: 'GENERIC', label: 'Genérica', description: 'Usuarios internos estándar',
-    badge: 'GEN', extensionAttribute14: 'GENERICA', isPrivileged: false, defaultPasswordLength: 16, subTypes: [],
+    key: 'GENERIC',    label: 'Genérica',    description: 'Usuarios internos estándar',
+    badge: 'GEN', extensionAttribute14: 'Genérica', isPrivileged: false, defaultPasswordLength: 16,
+    defaultCompany: 'USFQ', descriptionTemplate: 'Genérica', subTypes: [],
   },
   {
-    key: 'PARTNER', label: 'Partner', description: 'Socios externos o proveedores',
-    badge: 'PTR', extensionAttribute14: 'PARTNER', isPrivileged: false, defaultPasswordLength: 16, subTypes: [],
+    key: 'PARTNER',    label: 'Partner',     description: 'Socios externos o proveedores',
+    badge: 'PTR', extensionAttribute14: 'PARTNERS', isPrivileged: false, defaultPasswordLength: 16,
+    defaultCompany: 'USFQ', descriptionTemplate: 'PARTNERS', subTypes: [],
   },
   {
-    key: 'SERVICE', label: 'Servicio', description: 'Servicios o aplicaciones',
-    badge: 'SVC', extensionAttribute14: 'SERVICIO', isPrivileged: false, defaultPasswordLength: 20, subTypes: [],
+    key: 'SERVICE',    label: 'Servicio',    description: 'Servicios o aplicaciones',
+    badge: 'SVC', extensionAttribute14: 'SERVICES', isPrivileged: false, defaultPasswordLength: 20,
+    defaultCompany: 'USFQ', descriptionTemplate: 'SERVICES', subTypes: [],
   },
   {
-    key: 'EXTENSION', label: 'Extensión', description: 'Extensión de usuario existente',
-    badge: 'EXT', extensionAttribute14: 'EXTENSION', isPrivileged: false, defaultPasswordLength: 16, subTypes: [],
+    key: 'EXTENSION',  label: 'Extensión',   description: 'Extensión de usuario existente',
+    badge: 'EXT', extensionAttribute14: 'EXTENSION', isPrivileged: false, defaultPasswordLength: 16,
+    defaultCompany: 'USFQ', descriptionTemplate: 'EXTENSION', subTypes: [],
   },
   {
     key: 'PRIVILEGED', label: 'Privilegiada', description: 'Cuentas con acceso elevado — selecciona el sub-tipo',
     badge: 'PRV', extensionAttribute14: 'PRIVILEGED', isPrivileged: true, defaultPasswordLength: 20,
+    defaultCompany: 'USFQ', descriptionTemplate: 'PRIVILEGED',
     subTypes: [
       { key: 'OPERACIONES',    label: 'Operaciones',    samPrefix: 'op',    extensionAttribute14: 'PRIV_OP',  targetOU: 'OU=Privilegiadas,OU=Operaciones,DC=usfq,DC=edu,DC=ec',    isActive: true },
       { key: 'INFRAESTRUCTURA',label: 'Infraestructura',samPrefix: 'sa',    extensionAttribute14: 'PRIV_SA',  targetOU: 'OU=Privilegiadas,OU=Infraestructura,DC=usfq,DC=edu,DC=ec',isActive: true },
@@ -59,6 +64,8 @@ function mapApiType(raw: Record<string, unknown>): AccountTypeInfo {
     extensionAttribute14:  raw.extensionAttribute14  as string,
     isPrivileged:          raw.isPrivileged           as boolean,
     defaultPasswordLength: (raw.defaultPasswordLength as number) ?? 16,
+    defaultCompany:        raw.defaultCompany         as string | null | undefined,
+    descriptionTemplate:   (raw.descriptionTemplate   as string) ?? '',
     subTypes:              rawSubTypes.map(mapSubType),
   };
 }
@@ -108,9 +115,9 @@ export const accountCreationApi = {
   },
 
   async previewAccount(
-    typeKey:     AccountTypeKey,
-    form:        AccountFormData,
-    typeInfo:    AccountTypeInfo,
+    typeKey:      AccountTypeKey,
+    form:         AccountFormData,
+    typeInfo:     AccountTypeInfo,
     subTypeInfo?: AccountSubTypeInfo,
   ): Promise<AccountPreviewData> {
     try {
@@ -120,24 +127,21 @@ export const accountCreationApi = {
         body:    JSON.stringify({
           accountTypeKey: typeKey,
           subTypeKey:     subTypeInfo?.key,
+          accountName:    form.accountName,
           firstName:      form.firstName,
-          lastName1:      form.lastName1,
-          lastName2:      form.lastName2,
-          serviceName:    form.serviceName,
-          department:     form.department,
-          company:        form.company,
-          description:    form.description,
+          apellidos:      form.apellidos,
         }),
       });
       if (!res.ok) throw new Error();
       const raw = await res.json() as {
         userPrincipalName: string; samAccountName: string;
-        displayName: string; description: string; extensionAttribute14: string;
+        displayName: string; company: string; description: string; extensionAttribute14: string;
       };
       return {
         userPrincipalName:    raw.userPrincipalName,
         sAMAccountName:       raw.samAccountName,
         displayName:          raw.displayName,
+        company:              raw.company ?? '',
         description:          raw.description,
         extensionAttribute14: raw.extensionAttribute14,
       };

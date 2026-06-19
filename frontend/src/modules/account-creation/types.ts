@@ -28,17 +28,15 @@ export interface AccountTypeInfo {
   extensionAttribute14:  string;
   isPrivileged:          boolean;
   defaultPasswordLength: number;
+  defaultCompany?:       string | null;
+  descriptionTemplate:   string;
   subTypes:              AccountSubTypeInfo[];
 }
 
 export interface AccountFormData {
+  accountName:    string;
   firstName:      string;
-  lastName1:      string;
-  lastName2:      string;
-  serviceName:    string;
-  department:     string;
-  company:        string;
-  description:    string;
+  apellidos:      string;
   recoveryEmail:  string;
   password:       string;
   passwordLength: number;
@@ -48,6 +46,7 @@ export interface AccountPreviewData {
   userPrincipalName:    string;
   sAMAccountName:       string;
   displayName:          string;
+  company:              string;
   description:          string;
   extensionAttribute14: string;
 }

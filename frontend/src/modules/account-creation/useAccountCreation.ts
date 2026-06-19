@@ -7,13 +7,9 @@ import { computePreview } from './accountTypes';
 import { accountCreationApi } from './accountCreationApi';
 
 const BASE_FORM: AccountFormData = {
+  accountName:    '',
   firstName:      '',
-  lastName1:      '',
-  lastName2:      '',
-  serviceName:    '',
-  department:     '',
-  company:        '',
-  description:    '',
+  apellidos:      '',
   recoveryEmail:  '',
   password:       '',
   passwordLength: 16,

@@ -22,6 +22,7 @@ public sealed class AccountTypeRepository(IDbConnectionFactory db) : IAccountTyp
             atc.TargetOU,
             atc.DefaultPasswordLength,
             atc.DescriptionTemplate,
+            atc.DefaultCompany,
             atc.UpdatedAt  AS ConfigUpdatedAt,
             atc.UpdatedBy  AS ConfigUpdatedBy
         FROM  gov.AccountTypes           at
@@ -109,6 +110,7 @@ public sealed class AccountTypeRepository(IDbConnectionFactory db) : IAccountTyp
                    TargetOU              = @TargetOU,
                    DefaultPasswordLength = @DefaultPasswordLength,
                    DescriptionTemplate   = @DescriptionTemplate,
+                   DefaultCompany        = @DefaultCompany,
                    UpdatedAt             = GETUTCDATE(),
                    UpdatedBy             = @UpdatedBy
             WHERE  AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = @TypeKey)
@@ -120,6 +122,7 @@ public sealed class AccountTypeRepository(IDbConnectionFactory db) : IAccountTyp
                 dto.TargetOU,
                 dto.DefaultPasswordLength,
                 dto.DescriptionTemplate,
+                dto.DefaultCompany,
                 UpdatedBy = updatedBy,
                 TypeKey   = typeKey,
             }, tx);
@@ -158,6 +161,7 @@ public sealed class AccountTypeRepository(IDbConnectionFactory db) : IAccountTyp
         r.TargetOU,
         r.DefaultPasswordLength,
         r.DescriptionTemplate,
+        r.DefaultCompany,
         r.ConfigUpdatedAt,
         r.ConfigUpdatedBy,
         subTypes
@@ -177,6 +181,7 @@ public sealed class AccountTypeRepository(IDbConnectionFactory db) : IAccountTyp
         string?  TargetOU,
         int      DefaultPasswordLength,
         string   DescriptionTemplate,
+        string?  DefaultCompany,
         DateTime ConfigUpdatedAt,
         string?  ConfigUpdatedBy);
 
