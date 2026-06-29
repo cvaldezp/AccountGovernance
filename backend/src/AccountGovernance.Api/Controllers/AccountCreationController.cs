@@ -7,7 +7,10 @@ namespace AccountGovernance.Api.Controllers;
 [ApiController]
 [Route("api")]
 [Produces("application/json")]
-public sealed class AccountCreationController(IAccountCreationService svc) : ControllerBase
+public sealed class AccountCreationController(
+    IAccountCreationService            svc,
+    ILogger<AccountCreationController> logger
+) : ControllerBase
 {
     /// <summary>Returns the list of supported account types with their metadata.</summary>
     [HttpGet("account-types")]
@@ -65,6 +68,12 @@ public sealed class AccountCreationController(IAccountCreationService svc) : Con
         if (string.IsNullOrWhiteSpace(request.AccountTypeKey))
             return BadRequest(new { error = "El campo 'accountTypeKey' es requerido." });
 
+        logger.LogInformation(
+            "[validate-create] endpoint=POST /api/accounts/validate-create type={Type} subType={SubType} accountName={AccountName}",
+            request.AccountTypeKey,
+            request.SubTypeKey  ?? "(none)",
+            request.AccountName ?? "(none)");
+
         var result = await svc.ValidateCreateAsync(request, ct);
         return result.IsSuccess
             ? Ok(result.Data)
@@ -85,7 +94,15 @@ public sealed class AccountCreationController(IAccountCreationService svc) : Con
             return BadRequest(new { error = "El campo 'accountTypeKey' es requerido." });
 
         var operatorUpn = User.Identity?.Name ?? "UNKNOWN";
-        var result      = await svc.CreateAsync(request, operatorUpn, ct);
+
+        logger.LogInformation(
+            "[create] endpoint=POST /api/accounts/create type={Type} subType={SubType} accountName={AccountName} operator={Operator}",
+            request.AccountTypeKey,
+            request.SubTypeKey  ?? "(none)",
+            request.AccountName ?? "(none)",
+            operatorUpn);
+
+        var result = await svc.CreateAsync(request, operatorUpn, ct);
 
         return result.IsSuccess
             ? Ok(result.Data)

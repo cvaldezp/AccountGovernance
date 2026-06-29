@@ -1,4 +1,4 @@
-import type { AccountTypeKey, AccountSubTypeInfo, AccountFormData, AccountPreviewData } from './types';
+import type { AccountTypeKey, AccountTypeInfo, AccountSubTypeInfo, AccountFormData, AccountPreviewData } from './types';
 
 export const AD_DOMAIN = 'usfq.edu.ec';
 
@@ -28,7 +28,7 @@ export function computeDisplayName(form: AccountFormData): string {
 export function computePreview(
   typeKey:      AccountTypeKey,
   form:         AccountFormData,
-  typeInfo:     { extensionAttribute14: string; defaultCompany?: string | null; descriptionTemplate: string },
+  typeInfo:     AccountTypeInfo,
   subTypeInfo?: AccountSubTypeInfo,
 ): AccountPreviewData {
   const sam = computeSamAccountName(form, subTypeInfo?.samPrefix);
@@ -40,5 +40,13 @@ export function computePreview(
     company:              typeInfo.defaultCompany ?? 'USFQ',
     description:          typeKey === 'GENERIC' ? 'Genérica' : typeInfo.descriptionTemplate,
     extensionAttribute14: typeInfo.extensionAttribute14,
+    givenName:            form.firstName || null,
+    sn:                   form.apellidos || null,
+    recoveryEmail:        form.recoveryEmail || null,
+    targetOU:             subTypeInfo?.targetOU ?? null,
+    accountTypeKey:       typeKey,
+    accountTypeLabel:     typeInfo.label,
+    subTypeKey:           subTypeInfo?.key ?? null,
+    subTypeLabel:         subTypeInfo?.label ?? null,
   };
 }

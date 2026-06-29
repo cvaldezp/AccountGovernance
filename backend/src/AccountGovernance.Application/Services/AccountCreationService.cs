@@ -66,7 +66,10 @@ public sealed partial class AccountCreationService(
             return Result<AccountPreviewResponseDto>.Fail(
                 "Tipo de cuenta no válido.", "INVALID_ACCOUNT_TYPE");
 
-        string? samPrefix = null;
+        string? samPrefix    = null;
+        string? targetOU     = view.TargetOU;
+        string? subTypeKey   = null;
+        string? subTypeLabel = null;
 
         if (view.IsPrivileged)
         {
@@ -79,14 +82,17 @@ public sealed partial class AccountCreationService(
                 return Result<AccountPreviewResponseDto>.Fail(
                     "Sub-tipo no válido.", "INVALID_SUBTYPE");
 
-            samPrefix = subType.SamPrefix;
+            samPrefix    = subType.SamPrefix;
+            targetOU     = subType.TargetOU;
+            subTypeKey   = subType.SubTypeKey;
+            subTypeLabel = subType.Label;
         }
 
         var sam         = ComputeSam(request, samPrefix);
         var displayName = ComputeDisplayName(request);
         var company     = view.DefaultCompany ?? "USFQ";
         var description = view.DescriptionTemplate;
-        var extensionAttribute14 = view.ExtensionAttribute14;
+        var ea14        = view.ExtensionAttribute14;
 
         return Result<AccountPreviewResponseDto>.Ok(new AccountPreviewResponseDto(
             UserPrincipalName:    $"{sam}@{AdDomain}",
@@ -94,7 +100,15 @@ public sealed partial class AccountCreationService(
             DisplayName:          displayName,
             Company:              company,
             Description:          description,
-            ExtensionAttribute14: extensionAttribute14
+            ExtensionAttribute14: ea14,
+            GivenName:            request.FirstName?.Trim(),
+            Sn:                   request.Apellidos?.Trim(),
+            RecoveryEmail:        null,
+            TargetOU:             targetOU,
+            AccountTypeKey:       request.AccountTypeKey,
+            AccountTypeLabel:     view.Label,
+            SubTypeKey:           subTypeKey,
+            SubTypeLabel:         subTypeLabel
         ));
     }
 
@@ -112,12 +126,14 @@ public sealed partial class AccountCreationService(
         {
             errors.Add("Tipo de cuenta no válido.");
             return Result<ValidateCreateAccountResponseDto>.Ok(
-                new(false, errors, warnings, null));
+                new(false, errors, warnings, null,
+                    new ValidationChecksDto(false, null, null, null, false, null)));
         }
 
         // Resolve sub-type for PRIVILEGED
-        string? samPrefix = null;
-        string? targetOU  = view.TargetOU;
+        string? samPrefix    = null;
+        string? targetOU     = view.TargetOU;
+        string? subTypeLabel = null;
 
         if (view.IsPrivileged)
         {
@@ -132,8 +148,9 @@ public sealed partial class AccountCreationService(
                     errors.Add("Sub-tipo no válido.");
                 else
                 {
-                    samPrefix = subType.SamPrefix;
-                    targetOU  = subType.TargetOU;
+                    samPrefix    = subType.SamPrefix;
+                    targetOU     = subType.TargetOU;
+                    subTypeLabel = subType.Label;
                 }
             }
         }
@@ -150,25 +167,64 @@ public sealed partial class AccountCreationService(
         var description = view.DescriptionTemplate;
         var ea14        = view.ExtensionAttribute14;
 
-        var preview = new AccountPreviewResponseDto(upn, sam, displayName, company, description, ea14);
+        var preview = new AccountPreviewResponseDto(
+            UserPrincipalName:    upn,
+            SamAccountName:       sam,
+            DisplayName:          displayName,
+            Company:              company,
+            Description:          description,
+            ExtensionAttribute14: ea14,
+            GivenName:            request.FirstName?.Trim(),
+            Sn:                   request.Apellidos?.Trim(),
+            RecoveryEmail:        request.RecoveryEmail,
+            TargetOU:             targetOU,
+            AccountTypeKey:       request.AccountTypeKey,
+            AccountTypeLabel:     view.Label,
+            SubTypeKey:           request.SubTypeKey,
+            SubTypeLabel:         subTypeLabel
+        );
 
-        // Password length
+        // Password check
+        bool passwordValid = true;
         if (string.IsNullOrEmpty(request.Password))
+        {
             errors.Add("La contraseña es obligatoria.");
+            passwordValid = false;
+        }
         else if (request.Password.Length < view.DefaultPasswordLength)
+        {
             errors.Add($"La contraseña debe tener al menos {view.DefaultPasswordLength} caracteres.");
+            passwordValid = false;
+        }
 
         // Recovery email presence
         if (string.IsNullOrWhiteSpace(request.RecoveryEmail))
             errors.Add("El correo de recuperación es obligatorio.");
 
-        // Early-exit before AD checks if we already have blocking errors
+        // AD validations — only run when form fields are valid
+        bool? samAvailable       = null;
+        bool? upnAvailable       = null;
+        bool? recoveryEmailValid = null;
+        bool? ouValid            = null;
+
         if (errors.Count == 0 || errors.All(e => e.StartsWith("La contraseña") || e.StartsWith("El correo")))
-            await RunAdValidationsAsync(sam, upn, request.RecoveryEmail, targetOU, errors, warnings, ct);
+        {
+            (samAvailable, upnAvailable, recoveryEmailValid, ouValid) =
+                await RunAdValidationsAsync(sam, upn, request.RecoveryEmail, targetOU, errors, warnings, ct);
+        }
+
+        var checks = new ValidationChecksDto(
+            ConfigFound:        true,
+            SamAvailable:       samAvailable,
+            UpnAvailable:       upnAvailable,
+            RecoveryEmailValid: recoveryEmailValid,
+            PasswordValid:      passwordValid,
+            OuValid:            ouValid
+        );
 
         var canCreate = errors.Count == 0;
         return Result<ValidateCreateAccountResponseDto>.Ok(
-            new(canCreate, errors, warnings, preview));
+            new(canCreate, errors, warnings, preview, checks));
     }
 
     // ── Create account (Phase 2 — real AD creation) ────────────────────────────
@@ -276,7 +332,7 @@ public sealed partial class AccountCreationService(
 
     // ── AD validation helpers ─────────────────────────────────────────────────
 
-    private async Task RunAdValidationsAsync(
+    private async Task<(bool? sam, bool? upn, bool? email, bool? ou)> RunAdValidationsAsync(
         string    sam,
         string    upn,
         string?   recoveryEmail,
@@ -285,51 +341,78 @@ public sealed partial class AccountCreationService(
         List<string> warnings,
         CancellationToken ct)
     {
+        bool? samAvailable       = null;
+        bool? upnAvailable       = null;
+        bool? recoveryEmailValid = null;
+        bool? ouValid            = null;
+
         if (!string.IsNullOrEmpty(sam))
-            await TryAdCheckAsync(
-                () => adGateway.SamAccountNameExistsAsync(sam, ct),
-                exists  => errors.Add($"El sAMAccountName '{sam}' ya existe en Active Directory."),
-                warning => warnings.Add("No se pudo verificar si el sAMAccountName ya existe en AD (servicio no disponible)."),
-                ct);
+        {
+            var exists = await TryAdAsync(() => adGateway.SamAccountNameExistsAsync(sam, ct));
+            if (exists is null)
+                warnings.Add("No se pudo verificar si el sAMAccountName ya existe en AD (servicio no disponible).");
+            else if (exists == true)
+            {
+                errors.Add($"El sAMAccountName '{sam}' ya existe en Active Directory.");
+                samAvailable = false;
+            }
+            else
+                samAvailable = true;
+        }
 
         if (!string.IsNullOrEmpty(upn))
-            await TryAdCheckAsync(
-                () => adGateway.UserPrincipalNameExistsAsync(upn, ct),
-                exists  => errors.Add($"El UPN '{upn}' ya existe en Active Directory."),
-                warning => warnings.Add("No se pudo verificar si el UPN ya existe en AD (servicio no disponible)."),
-                ct);
+        {
+            var exists = await TryAdAsync(() => adGateway.UserPrincipalNameExistsAsync(upn, ct));
+            if (exists is null)
+                warnings.Add("No se pudo verificar si el UPN ya existe en AD (servicio no disponible).");
+            else if (exists == true)
+            {
+                errors.Add($"El UPN '{upn}' ya existe en Active Directory.");
+                upnAvailable = false;
+            }
+            else
+                upnAvailable = true;
+        }
 
         if (!string.IsNullOrWhiteSpace(recoveryEmail))
-            await TryAdCheckAsync(
-                async () => !await adGateway.UserExistsAndIsEnabledAsync(recoveryEmail, ct),
-                notFound => errors.Add($"El correo de recuperación '{recoveryEmail}' no corresponde a un usuario habilitado en AD."),
-                warning  => warnings.Add("No se pudo verificar el correo de recuperación en AD (servicio no disponible)."),
-                ct);
+        {
+            var found = await TryAdAsync(() => adGateway.UserExistsAndIsEnabledAsync(recoveryEmail, ct));
+            if (found is null)
+                warnings.Add("No se pudo verificar el correo de recuperación en AD (servicio no disponible).");
+            else if (found == false)
+            {
+                errors.Add($"El correo de recuperación '{recoveryEmail}' no corresponde a un usuario habilitado en AD.");
+                recoveryEmailValid = false;
+            }
+            else
+                recoveryEmailValid = true;
+        }
 
         if (!string.IsNullOrWhiteSpace(targetOU))
-            await TryAdCheckAsync(
-                async () => !await adGateway.OuExistsAsync(targetOU, ct),
-                notFound => errors.Add($"La OU destino no existe en Active Directory."),
-                warning  => warnings.Add("No se pudo verificar la OU destino en AD (servicio no disponible)."),
-                ct);
+        {
+            var exists = await TryAdAsync(() => adGateway.OuExistsAsync(targetOU, ct));
+            if (exists is null)
+                warnings.Add("No se pudo verificar la OU destino en AD (servicio no disponible).");
+            else if (exists == false)
+            {
+                errors.Add("La OU destino no existe en Active Directory.");
+                ouValid = false;
+            }
+            else
+                ouValid = true;
+        }
         else
+        {
             warnings.Add("No hay OU destino configurada para este tipo/sub-tipo.");
+        }
+
+        return (samAvailable, upnAvailable, recoveryEmailValid, ouValid);
     }
 
-    private static async Task TryAdCheckAsync(
-        Func<Task<bool>>    check,
-        Action<bool>        onTrue,
-        Action<Exception>   onError,
-        CancellationToken   _)
+    private static async Task<bool?> TryAdAsync(Func<Task<bool>> check)
     {
-        try
-        {
-            if (await check()) onTrue(true);
-        }
-        catch (Exception ex)
-        {
-            onError(ex);
-        }
+        try   { return await check(); }
+        catch { return null; }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────

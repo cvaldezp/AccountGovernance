@@ -149,6 +149,9 @@ export const accountCreationApi = {
       const raw = await res.json() as {
         userPrincipalName: string; samAccountName: string;
         displayName: string; company: string; description: string; extensionAttribute14: string;
+        givenName?: string | null; sn?: string | null; recoveryEmail?: string | null;
+        targetOU?: string | null; accountTypeKey?: string; accountTypeLabel?: string;
+        subTypeKey?: string | null; subTypeLabel?: string | null;
       };
       return {
         userPrincipalName:    raw.userPrincipalName,
@@ -157,6 +160,14 @@ export const accountCreationApi = {
         company:              raw.company ?? '',
         description:          raw.description,
         extensionAttribute14: raw.extensionAttribute14,
+        givenName:            raw.givenName,
+        sn:                   raw.sn,
+        recoveryEmail:        raw.recoveryEmail,
+        targetOU:             raw.targetOU,
+        accountTypeKey:       raw.accountTypeKey,
+        accountTypeLabel:     raw.accountTypeLabel,
+        subTypeKey:           raw.subTypeKey,
+        subTypeLabel:         raw.subTypeLabel,
       };
     } catch {
       return computePreview(typeKey, form, typeInfo, subTypeInfo);
@@ -188,12 +199,26 @@ export const accountCreationApi = {
       });
 
       if (!res.ok) {
-        const body = await res.text().catch(() => '');
+        const bodyText = await res.text().catch(() => '');
+        let friendlyError: string;
+        if (res.status === 500) {
+          friendlyError =
+            'No se pudo validar la creación de la cuenta. ' +
+            'Revise la configuración del tipo de cuenta o consulte los logs del backend.';
+        } else {
+          try {
+            const parsed = JSON.parse(bodyText) as { error?: string };
+            friendlyError = parsed.error ?? `Error del servidor (HTTP ${res.status})`;
+          } catch {
+            friendlyError = `Error del servidor (HTTP ${res.status})`;
+          }
+        }
         return {
           canCreate: false,
-          errors:    [`Error del servidor (HTTP ${res.status})${body ? `: ${body}` : ''}`],
+          errors:    [friendlyError],
           warnings:  [],
           preview:   null,
+          checks:    null,
         };
       }
 
@@ -204,6 +229,13 @@ export const accountCreationApi = {
         preview: {
           userPrincipalName: string; samAccountName: string;
           displayName: string; company: string; description: string; extensionAttribute14: string;
+          givenName?: string | null; sn?: string | null; recoveryEmail?: string | null;
+          targetOU?: string | null; accountTypeKey?: string; accountTypeLabel?: string;
+          subTypeKey?: string | null; subTypeLabel?: string | null;
+        } | null;
+        checks: {
+          configFound: boolean; samAvailable: boolean | null; upnAvailable: boolean | null;
+          recoveryEmailValid: boolean | null; passwordValid: boolean; ouValid: boolean | null;
         } | null;
       };
       return {
@@ -218,6 +250,24 @@ export const accountCreationApi = {
               company:              raw.preview.company ?? '',
               description:          raw.preview.description,
               extensionAttribute14: raw.preview.extensionAttribute14,
+              givenName:            raw.preview.givenName,
+              sn:                   raw.preview.sn,
+              recoveryEmail:        raw.preview.recoveryEmail,
+              targetOU:             raw.preview.targetOU,
+              accountTypeKey:       raw.preview.accountTypeKey,
+              accountTypeLabel:     raw.preview.accountTypeLabel,
+              subTypeKey:           raw.preview.subTypeKey,
+              subTypeLabel:         raw.preview.subTypeLabel,
+            }
+          : null,
+        checks: raw.checks
+          ? {
+              configFound:        raw.checks.configFound,
+              samAvailable:       raw.checks.samAvailable,
+              upnAvailable:       raw.checks.upnAvailable,
+              recoveryEmailValid: raw.checks.recoveryEmailValid,
+              passwordValid:      raw.checks.passwordValid,
+              ouValid:            raw.checks.ouValid,
             }
           : null,
       };
@@ -227,6 +277,7 @@ export const accountCreationApi = {
         errors:    [`No se pudo conectar con el servidor de validación: ${errorMessage(err)}`],
         warnings:  [],
         preview:   null,
+        checks:    null,
       };
     }
   },

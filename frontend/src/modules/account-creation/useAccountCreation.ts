@@ -155,6 +155,7 @@ export function useAccountCreation() {
         errors:    ['Error al conectar con el servicio de validación.'],
         warnings:  [],
         preview:   preview,
+        checks:    null,
       });
       setCreationStep('confirming');
     }

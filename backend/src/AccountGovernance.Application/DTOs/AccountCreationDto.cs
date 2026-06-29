@@ -14,11 +14,21 @@ public sealed record AccountCreationRequestDto(
     string? Password
 );
 
+public sealed record ValidationChecksDto(
+    bool  ConfigFound,
+    bool? SamAvailable,
+    bool? UpnAvailable,
+    bool? RecoveryEmailValid,
+    bool  PasswordValid,
+    bool? OuValid
+);
+
 public sealed record ValidateCreateAccountResponseDto(
     bool                       CanCreate,
     IReadOnlyList<string>      Errors,
     IReadOnlyList<string>      Warnings,
-    AccountPreviewResponseDto? Preview
+    AccountPreviewResponseDto? Preview,
+    ValidationChecksDto?       Checks
 );
 
 public sealed record CreateAccountResponseDto(

@@ -49,6 +49,15 @@ export interface AccountPreviewData {
   company:              string;
   description:          string;
   extensionAttribute14: string;
+  // extended — present when data comes from backend
+  givenName?:           string | null;
+  sn?:                  string | null;
+  recoveryEmail?:       string | null;
+  targetOU?:            string | null;
+  accountTypeKey?:      string;
+  accountTypeLabel?:    string;
+  subTypeKey?:          string | null;
+  subTypeLabel?:        string | null;
 }
 
 export type EmailValidationStatus = 'idle' | 'loading' | 'valid' | 'invalid';
@@ -68,11 +77,21 @@ export type CreationStep =
   | 'creating'    // calling create
   | 'result';     // showing final result
 
+export interface ValidationChecks {
+  configFound:        boolean;
+  samAvailable:       boolean | null;
+  upnAvailable:       boolean | null;
+  recoveryEmailValid: boolean | null;
+  passwordValid:      boolean;
+  ouValid:            boolean | null;
+}
+
 export interface ValidationResult {
   canCreate: boolean;
   errors:    string[];
   warnings:  string[];
   preview:   AccountPreviewData | null;
+  checks:    ValidationChecks | null;
 }
 
 export interface CreateResult {

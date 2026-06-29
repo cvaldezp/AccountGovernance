@@ -9,10 +9,18 @@ public sealed record AccountPreviewRequestDto(
 );
 
 public sealed record AccountPreviewResponseDto(
-    string UserPrincipalName,
-    string SamAccountName,
-    string DisplayName,
-    string Company,
-    string Description,
-    string ExtensionAttribute14
+    string  UserPrincipalName,
+    string  SamAccountName,
+    string  DisplayName,
+    string  Company,
+    string  Description,
+    string  ExtensionAttribute14,
+    string? GivenName,
+    string? Sn,
+    string? RecoveryEmail,
+    string? TargetOU,
+    string  AccountTypeKey,
+    string  AccountTypeLabel,
+    string? SubTypeKey,
+    string? SubTypeLabel
 );

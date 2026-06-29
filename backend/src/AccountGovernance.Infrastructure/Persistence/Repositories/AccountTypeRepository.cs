@@ -42,7 +42,6 @@ public sealed class AccountTypeRepository(IDbConnectionFactory db) : IAccountTyp
             st.SortOrder
         FROM gov.AccountSubTypes st
         WHERE st.IsActive = 1
-        ORDER BY st.SortOrder
         """;
 
     public async Task<IReadOnlyList<AccountTypeView>> GetAllAsync(bool activeOnly, CancellationToken ct)
@@ -53,7 +52,7 @@ public sealed class AccountTypeRepository(IDbConnectionFactory db) : IAccountTyp
         var rows = (await conn.QueryAsync<TypeRow>(sql)).ToList();
 
         var subTypeRows = rows.Count > 0
-            ? (await conn.QueryAsync<SubTypeRow>(SubTypeSql)).ToList()
+            ? (await conn.QueryAsync<SubTypeRow>(SubTypeSql + " ORDER BY st.SortOrder")).ToList()
             : [];
 
         var subTypeMap = subTypeRows
@@ -78,7 +77,7 @@ public sealed class AccountTypeRepository(IDbConnectionFactory db) : IAccountTyp
         if (row is null) return null;
 
         var subTypeRows = await conn.QueryAsync<SubTypeRow>(
-            SubTypeSql + " AND st.AccountTypeId = @Id",
+            SubTypeSql + " AND st.AccountTypeId = @Id ORDER BY st.SortOrder",
             new { row.Id });
 
         var subtypes = subTypeRows
