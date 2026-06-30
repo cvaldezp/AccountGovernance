@@ -227,6 +227,138 @@ public sealed class AdGateway(
         }, ct);
     }
 
+    public Task<bool> DeleteUserAsync(string userDn, CancellationToken ct = default)
+    {
+        return Task.Run(() =>
+        {
+            using var conn = CreateConnection();
+            conn.Bind();
+            try
+            {
+                conn.SendRequest(new DeleteRequest(userDn));
+                logger.LogWarning("AD user deleted (rollback) — DN: {Dn}", userDn);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to delete AD user for rollback — DN: {Dn}", userDn);
+                return false;
+            }
+        }, ct);
+    }
+
+    // ── Group operations ───────────────────────────────────────────────────────
+
+    public Task<AdGroupInfo?> GetGroupAsync(string dnOrName, CancellationToken ct = default)
+    {
+        return Task.Run<AdGroupInfo?>(() =>
+        {
+            using var conn = CreateConnection();
+            conn.Bind();
+
+            var isDn    = dnOrName.Contains('=');
+            var escaped = EscapeLdap(dnOrName);
+            var filter  = isDn
+                ? $"(&(objectClass=group)(distinguishedName={escaped}))"
+                : $"(&(objectClass=group)(cn={escaped}))";
+
+            var req = new SearchRequest(
+                options.Value.BaseDn, filter, SearchScope.Subtree,
+                new[] { "cn", "distinguishedName", "objectGUID", "objectSid", "groupType" })
+            {
+                SizeLimit = 1,
+                TimeLimit = TimeSpan.FromSeconds(options.Value.TimeoutSeconds),
+            };
+
+            SearchResponse resp;
+            try
+            {
+                resp = (SearchResponse)conn.SendRequest(req);
+            }
+            catch (DirectoryOperationException ex)
+                when (ex.Response?.ResultCode == ResultCode.NoSuchObject)
+            {
+                return null;
+            }
+
+            if (resp.Entries.Count == 0) return null;
+
+            var entry = resp.Entries[0];
+            var name  = GetStringAttr(entry, "cn") ?? string.Empty;
+            var dn    = entry.DistinguishedName ?? GetStringAttr(entry, "distinguishedName") ?? string.Empty;
+
+            string? objectGuid = null;
+            var guidAttr = entry.Attributes["objectGUID"];
+            if (guidAttr?.Count > 0)
+            {
+                try { objectGuid = new Guid((byte[])guidAttr[0]).ToString(); }
+                catch { /* malformed */ }
+            }
+
+            string? sid = null;
+            var sidAttr = entry.Attributes["objectSid"];
+            if (sidAttr?.Count > 0)
+            {
+                try
+                {
+#pragma warning disable CA1416 // Windows-only API — this project runs on Windows AD infrastructure
+                    sid = new System.Security.Principal.SecurityIdentifier((byte[])sidAttr[0], 0).ToString();
+#pragma warning restore CA1416
+                }
+                catch { /* malformed */ }
+            }
+
+            int groupType = 0;
+            var typeAttr = entry.Attributes["groupType"];
+            if (typeAttr?.Count > 0)
+                int.TryParse(typeAttr[0]?.ToString(), out groupType);
+
+            // Bit 0x80000000 = Security group flag (stored as signed int)
+            var isSecurity = (groupType & unchecked((int)0x80000000)) != 0;
+
+            return new AdGroupInfo(name, dn, objectGuid, sid, isSecurity);
+        }, ct);
+    }
+
+    public Task<bool> AddUserToGroupAsync(string userDn, string groupDn, CancellationToken ct = default)
+    {
+        return Task.Run(() =>
+        {
+            using var conn = CreateConnection();
+            conn.Bind();
+
+            var mod = new DirectoryAttributeModification
+            {
+                Name      = "member",
+                Operation = DirectoryAttributeOperation.Add,
+            };
+            mod.Add(userDn);
+
+            var req = new ModifyRequest(groupDn);
+            req.Modifications.Add(mod);
+
+            try
+            {
+                conn.SendRequest(req);
+                logger.LogInformation(
+                    "Group membership added — User: {UserDn}, Group: {GroupDn}", userDn, groupDn);
+                return true;
+            }
+            catch (DirectoryOperationException ex)
+            {
+                logger.LogError(ex,
+                    "Failed to add user {UserDn} to group {GroupDn}", userDn, groupDn);
+                return false;
+            }
+        }, ct);
+    }
+
+    private static string? GetStringAttr(SearchResultEntry entry, string name)
+    {
+        var attr = entry.Attributes[name];
+        return attr?.Count > 0 ? attr[0]?.ToString() : null;
+    }
+
     // ── Filter construction ────────────────────────────────────────────────────
 
     private string BuildSearchFilter(string q)

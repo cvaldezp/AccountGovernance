@@ -71,7 +71,8 @@ export type RouteKey =
   | 'account-creation'
   | 'attribute-catalog'
   | 'permissions-matrix'
-  | 'account-type-config';
+  | 'account-type-config'
+  | 'initial-groups';
 
 // ── Parametric field configuration ──────────────────────────────────────────
 

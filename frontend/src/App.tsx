@@ -9,6 +9,7 @@ import { AttributeCatalogPage } from './modules/permissions/AttributeCatalogPage
 import { PermissionsMatrixPage } from './modules/permissions/PermissionsMatrixPage';
 import { CreateAccountPage } from './modules/account-creation/CreateAccountPage';
 import { AccountTypeConfigPage } from './modules/account-type-config/AccountTypeConfigPage';
+import { InitialGroupsPage } from './modules/initial-groups/InitialGroupsPage';
 
 function RouterView() {
   const { currentRoute } = useRouter();
@@ -22,6 +23,7 @@ function RouterView() {
     case 'attribute-catalog':   return <AttributeCatalogPage />;
     case 'permissions-matrix':  return <PermissionsMatrixPage />;
     case 'account-type-config': return <AccountTypeConfigPage />;
+    case 'initial-groups':      return <InitialGroupsPage />;
     default:                 return <DashboardPage />;
   }
 }

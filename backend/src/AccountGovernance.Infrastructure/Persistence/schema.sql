@@ -362,6 +362,41 @@ BEGIN
 END
 GO
 
+-- ── 9. Initial groups for account creation ───────────────────────────────────
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.tables t
+    JOIN sys.schemas s ON t.schema_id = s.schema_id
+    WHERE t.name = 'AccountTypeInitialGroups' AND s.name = 'gov'
+)
+BEGIN
+    CREATE TABLE gov.AccountTypeInitialGroups (
+        Id               INT           NOT NULL IDENTITY(1,1) PRIMARY KEY,
+        AccountTypeId    INT           NOT NULL,
+        AccountSubTypeId INT           NULL,
+        GroupName        NVARCHAR(256) NOT NULL,
+        GroupDn          NVARCHAR(512) NOT NULL,
+        GroupObjectGuid  NVARCHAR(64)  NULL,
+        GroupSid         NVARCHAR(256) NULL,
+        IsCritical       BIT           NOT NULL DEFAULT 1,
+        IsActive         BIT           NOT NULL DEFAULT 1,
+        SortOrder        INT           NOT NULL DEFAULT 0,
+        CreatedAt        DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+        UpdatedAt        DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+        UpdatedBy        NVARCHAR(200) NULL,
+
+        CONSTRAINT FK_InitialGroups_AccountType
+            FOREIGN KEY (AccountTypeId) REFERENCES gov.AccountTypes(Id),
+        CONSTRAINT FK_InitialGroups_AccountSubType
+            FOREIGN KEY (AccountSubTypeId) REFERENCES gov.AccountSubTypes(Id)
+    );
+
+    CREATE INDEX IX_InitialGroups_TypeId    ON gov.AccountTypeInitialGroups (AccountTypeId);
+    CREATE INDEX IX_InitialGroups_SubTypeId ON gov.AccountTypeInitialGroups (AccountSubTypeId);
+    CREATE INDEX IX_InitialGroups_Active    ON gov.AccountTypeInitialGroups (IsActive);
+END
+GO
+
 -- ── 5. Seed: field definitions ────────────────────────────────────────────────
 
 IF NOT EXISTS (SELECT 1 FROM gov.FieldDefinitions WHERE FieldKey = 'field-ext-email')

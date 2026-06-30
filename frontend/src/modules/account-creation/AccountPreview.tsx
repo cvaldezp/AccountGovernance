@@ -129,6 +129,64 @@ export function AccountPreview({ preview, source = 'local' }: Props) {
         <AttrRow label="extensionAttribute14" value={preview.extensionAttribute14} badge />
       </div>
 
+      {/* ── Grupos iniciales ─────────────────────────────────────────── */}
+      {preview.initialGroups && preview.initialGroups.length > 0 && (
+        <div style={{
+          marginTop:    '12px',
+          padding:      '12px 14px',
+          background:   'var(--ds-neutral-50)',
+          border:       '1px solid var(--ds-neutral-200)',
+          borderRadius: 'var(--ds-radius-lg)',
+        }}>
+          <div style={{
+            fontSize:      'var(--ds-text-xs)',
+            fontWeight:    700,
+            color:         'var(--ds-neutral-500)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            marginBottom:  '8px',
+          }}>
+            Grupos iniciales
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            {preview.initialGroups.map(g => (
+              <div key={g.id} style={{
+                display:      'flex',
+                alignItems:   'center',
+                gap:          '8px',
+                fontSize:     'var(--ds-text-sm)',
+              }}>
+                <span style={{
+                  flexShrink: 0,
+                  color: g.existsInAd === false
+                    ? 'var(--ds-danger-main)'
+                    : g.existsInAd === true
+                      ? 'var(--ds-success-main)'
+                      : 'var(--ds-neutral-300)',
+                }}>
+                  {g.existsInAd === false ? '✗' : g.existsInAd === true ? '✓' : '?'}
+                </span>
+                <span style={{ flex: 1, color: 'var(--ds-neutral-700)' }}>{g.groupName}</span>
+                {g.isCritical && (
+                  <span style={{
+                    fontSize:     '10px',
+                    fontWeight:   700,
+                    color:        'var(--ds-danger-dark)',
+                    background:   'var(--ds-danger-light)',
+                    border:       '1px solid var(--ds-danger-border)',
+                    borderRadius: '4px',
+                    padding:      '1px 5px',
+                    flexShrink:   0,
+                  }}>
+                    crítico
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Ver atributos LDAP completos */}
       <div style={{ marginTop: '12px' }}>
         <AppButton

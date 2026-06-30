@@ -238,6 +238,9 @@ export const accountCreationApi = {
           subTypeKey?: string | null; subTypeLabel?: string | null;
           mail?: string | null; department?: string | null;
           managerDn?: string | null; managerDisplayName?: string | null;
+          initialGroups?: Array<{
+            id: number; groupName: string; groupDn: string; isCritical: boolean; existsInAd: boolean | null;
+          }> | null;
         } | null;
         checks: {
           configFound: boolean; samAvailable: boolean | null; upnAvailable: boolean | null;
@@ -268,6 +271,7 @@ export const accountCreationApi = {
               department:           raw.preview.department,
               managerDn:            raw.preview.managerDn,
               managerDisplayName:   raw.preview.managerDisplayName,
+              initialGroups:        raw.preview.initialGroups ?? null,
             }
           : null,
         checks: raw.checks
@@ -326,6 +330,7 @@ export const accountCreationApi = {
       const raw = await res.json() as {
         success: boolean; message: string;
         samAccountName?: string; userPrincipalName?: string; displayName?: string;
+        groupAssignments?: Array<{ groupName: string; success: boolean; error: string | null }> | null;
       };
       return {
         success:           raw.success,
@@ -333,6 +338,7 @@ export const accountCreationApi = {
         samAccountName:    raw.samAccountName,
         userPrincipalName: raw.userPrincipalName,
         displayName:       raw.displayName,
+        groupAssignments:  raw.groupAssignments ?? null,
       };
     } catch (err) {
       return {

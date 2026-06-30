@@ -37,5 +37,6 @@ public sealed record CreateAccountResponseDto(
     string  Message,
     string? SamAccountName,
     string? UserPrincipalName,
-    string? DisplayName
+    string? DisplayName,
+    IReadOnlyList<GroupAssignmentResultDto>? GroupAssignments = null
 );

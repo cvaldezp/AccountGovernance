@@ -26,5 +26,6 @@ public sealed record AccountPreviewResponseDto(
     string? Mail,
     string? Department,
     string? ManagerDn,
-    string? ManagerDisplayName
+    string? ManagerDisplayName,
+    IReadOnlyList<InitialGroupPreviewDto>? InitialGroups = null
 );

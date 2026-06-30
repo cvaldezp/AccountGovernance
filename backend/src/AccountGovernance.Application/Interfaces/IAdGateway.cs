@@ -7,6 +7,15 @@ public sealed record AdSearchResult(
     IReadOnlyList<User> Users,
     bool                TooManyResults);
 
+/// <summary>Basic info returned when looking up an AD group.</summary>
+public sealed record AdGroupInfo(
+    string  Name,
+    string  Dn,
+    string? ObjectGuid,
+    string? Sid,
+    bool    IsSecurity
+);
+
 /// <summary>Full set of attributes needed to create an AD user account.</summary>
 public sealed record AdCreateUserRequest(
     string  UserDn,
@@ -71,4 +80,15 @@ public interface IAdGateway
 
     /// <summary>Creates a new user in AD with the given attributes and password.</summary>
     Task<AdCreateUserResult> CreateUserAsync(AdCreateUserRequest request, CancellationToken ct = default);
+
+    /// <summary>Deletes a user from AD by DN — used for rollback after partial creation failures.</summary>
+    Task<bool> DeleteUserAsync(string userDn, CancellationToken ct = default);
+
+    // ── Group operations ──────────────────────────────────────────────────────────
+
+    /// <summary>Looks up an AD group by DN (if input contains '=') or by CN. Returns null if not found.</summary>
+    Task<AdGroupInfo?> GetGroupAsync(string dnOrName, CancellationToken ct = default);
+
+    /// <summary>Adds the user (by DN) as a member of the group (by DN). Returns true on success.</summary>
+    Task<bool> AddUserToGroupAsync(string userDn, string groupDn, CancellationToken ct = default);
 }

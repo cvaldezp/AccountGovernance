@@ -18,6 +18,7 @@ const CONFIG_NAV: NavItem[] = [
   { key: 'attribute-catalog',    label: 'Catálogo AD',       icon: '≡' },
   { key: 'permissions-matrix',   label: 'Matriz de Permisos',icon: '⊞' },
   { key: 'account-type-config',  label: 'Tipos de Cuenta',   icon: '⊟' },
+  { key: 'initial-groups',       label: 'Grupos Iniciales',  icon: '⊕' },
 ];
 
 function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }) {

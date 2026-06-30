@@ -44,6 +44,20 @@ export interface AccountFormData {
   passwordLength: number;
 }
 
+export interface InitialGroupPreview {
+  id:         number;
+  groupName:  string;
+  groupDn:    string;
+  isCritical: boolean;
+  existsInAd: boolean | null;
+}
+
+export interface GroupAssignmentResult {
+  groupName: string;
+  success:   boolean;
+  error:     string | null;
+}
+
 export interface AccountPreviewData {
   userPrincipalName:    string;
   sAMAccountName:       string;
@@ -64,6 +78,7 @@ export interface AccountPreviewData {
   department?:          string | null;
   managerDn?:           string | null;
   managerDisplayName?:  string | null;
+  initialGroups?:       InitialGroupPreview[] | null;
 }
 
 export type EmailValidationStatus = 'idle' | 'loading' | 'valid' | 'invalid';
@@ -108,4 +123,5 @@ export interface CreateResult {
   samAccountName?:    string;
   userPrincipalName?: string;
   displayName?:       string;
+  groupAssignments?:  GroupAssignmentResult[] | null;
 }

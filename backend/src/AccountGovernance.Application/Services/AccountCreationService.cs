@@ -10,6 +10,7 @@ namespace AccountGovernance.Application.Services;
 
 public sealed partial class AccountCreationService(
     IAccountTypeRepository          accountTypeRepository,
+    IAccountTypeGroupRepository     groupRepository,
     IAdGateway                      adGateway,
     IAccountCreationAuditRepository auditRepository
 ) : IAccountCreationService
@@ -156,6 +157,7 @@ public sealed partial class AccountCreationService(
         string? samPrefix    = null;
         string? targetOU     = view.TargetOU;
         string? subTypeLabel = null;
+        int?    subTypeId    = null;
 
         if (view.IsPrivileged)
         {
@@ -173,6 +175,7 @@ public sealed partial class AccountCreationService(
                     samPrefix    = subType.SamPrefix;
                     targetOU     = subType.TargetOU;
                     subTypeLabel = subType.Label;
+                    subTypeId    = subType.Id;
                 }
             }
         }
@@ -250,6 +253,31 @@ public sealed partial class AccountCreationService(
             }
         }
 
+        // Validate initial groups in AD (best-effort — never blocks canCreate)
+        var initialGroups = new List<InitialGroupPreviewDto>();
+        try
+        {
+            var groups = await groupRepository.GetForCreationAsync(view.Id, subTypeId, ct);
+            foreach (var grp in groups)
+            {
+                bool? exists = null;
+                try
+                {
+                    var adGroup = await adGateway.GetGroupAsync(grp.GroupDn, ct);
+                    exists = adGroup is not null;
+                }
+                catch { /* AD not reachable for group lookup */ }
+
+                if (exists == false)
+                    warnings.Add(grp.IsCritical
+                        ? $"Grupo crítico '{grp.GroupName}' no encontrado en Active Directory."
+                        : $"Grupo '{grp.GroupName}' no encontrado en AD (no crítico).");
+
+                initialGroups.Add(new InitialGroupPreviewDto(grp.Id, grp.GroupName, grp.GroupDn, grp.IsCritical, exists));
+            }
+        }
+        catch { /* group config unavailable — non-blocking */ }
+
         var preview = new AccountPreviewResponseDto(
             UserPrincipalName:    upn,
             SamAccountName:       sam,
@@ -268,7 +296,8 @@ public sealed partial class AccountCreationService(
             Mail:                 mail,
             Department:           department,
             ManagerDn:            managerDn,
-            ManagerDisplayName:   managerDisplayName
+            ManagerDisplayName:   managerDisplayName,
+            InitialGroups:        initialGroups.Count > 0 ? initialGroups : null
         );
 
         var checks = new ValidationChecksDto(
@@ -306,6 +335,7 @@ public sealed partial class AccountCreationService(
 
         string? samPrefix = null;
         string? targetOU  = view.TargetOU;
+        int?    subTypeId = null;
 
         if (view.IsPrivileged && !string.IsNullOrWhiteSpace(request.SubTypeKey))
         {
@@ -314,6 +344,7 @@ public sealed partial class AccountCreationService(
             {
                 samPrefix = subType.SamPrefix;
                 targetOU  = subType.TargetOU;
+                subTypeId = subType.Id;
             }
         }
 
@@ -383,7 +414,48 @@ public sealed partial class AccountCreationService(
             adResult = new AdCreateUserResult(false, $"Error inesperado en Active Directory: {ex.Message}", null);
         }
 
-        // Audit log (no password)
+        // ── Group assignments (only if user was created successfully) ──────────
+        var groupResults = new List<GroupAssignmentResultDto>();
+        if (adResult.Success)
+        {
+            var groups = await groupRepository.GetForCreationAsync(view.Id, subTypeId, ct);
+            bool criticalFailed = false;
+
+            foreach (var grp in groups)
+            {
+                bool assigned;
+                string? groupError = null;
+                try
+                {
+                    assigned = await adGateway.AddUserToGroupAsync(userDn, grp.GroupDn, ct);
+                    if (!assigned)
+                        groupError = $"AddUserToGroupAsync devolvió false para '{grp.GroupName}'.";
+                }
+                catch (Exception ex)
+                {
+                    assigned   = false;
+                    groupError = ex.Message;
+                }
+
+                groupResults.Add(new GroupAssignmentResultDto(grp.GroupName, assigned, assigned ? null : groupError));
+
+                if (!assigned && grp.IsCritical)
+                    criticalFailed = true;
+            }
+
+            if (criticalFailed)
+            {
+                // Roll back user creation — delete the partially-provisioned account
+                await adGateway.DeleteUserAsync(userDn, ct);
+                adResult = new AdCreateUserResult(
+                    false,
+                    "Fallo al asignar un grupo crítico. La cuenta fue revertida. " +
+                    "Revise los grupos de la tabla gov.AccountTypeInitialGroups.",
+                    null);
+            }
+        }
+
+        // ── Audit log (no password, no secrets) ───────────────────────────────
         var auditEntry = new AccountCreationAuditEntry(
             Operator:       operatorUpn,
             AccountTypeKey: request.AccountTypeKey,
@@ -407,12 +479,13 @@ public sealed partial class AccountCreationService(
         }
         catch
         {
-            // Audit failure is non-blocking; the AD gateway logs AD-level errors
+            // Audit failure is non-blocking
         }
 
         return adResult.Success
             ? Result<CreateAccountResponseDto>.Ok(
-                new CreateAccountResponseDto(true, adResult.Message, sam, upn, displayName))
+                new CreateAccountResponseDto(true, adResult.Message, sam, upn, displayName,
+                    groupResults.Count > 0 ? groupResults : null))
             : Result<CreateAccountResponseDto>.Fail(adResult.Message, "AD_ERROR");
     }
 
