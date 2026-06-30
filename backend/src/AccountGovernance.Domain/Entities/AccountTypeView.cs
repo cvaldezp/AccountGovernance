@@ -18,5 +18,6 @@ public sealed record AccountTypeView(
     string?  DefaultCompany,
     DateTime ConfigUpdatedAt,
     string?  ConfigUpdatedBy,
+    string?  DepartmentPrefix,
     IReadOnlyList<AccountSubTypeInfo> SubTypes
 );

@@ -184,6 +184,27 @@ IF NOT EXISTS (
     ALTER TABLE gov.AccountTypeConfigurations ADD DefaultCompany NVARCHAR(200) NULL;
 GO
 
+-- ── 4c. Migration: add DepartmentPrefix column (idempotent) ─────────────────────
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.columns
+    WHERE  object_id = OBJECT_ID('gov.AccountTypeConfigurations') AND name = 'DepartmentPrefix'
+)
+    ALTER TABLE gov.AccountTypeConfigurations ADD DepartmentPrefix NVARCHAR(20) NULL;
+GO
+
+UPDATE gov.AccountTypeConfigurations SET DepartmentPrefix = 'GEN'
+WHERE AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'GENERIC')    AND DepartmentPrefix IS NULL;
+UPDATE gov.AccountTypeConfigurations SET DepartmentPrefix = 'PART'
+WHERE AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'PARTNER')    AND DepartmentPrefix IS NULL;
+UPDATE gov.AccountTypeConfigurations SET DepartmentPrefix = 'SVC'
+WHERE AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'SERVICE')    AND DepartmentPrefix IS NULL;
+UPDATE gov.AccountTypeConfigurations SET DepartmentPrefix = 'EXT'
+WHERE AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'EXTENSION')  AND DepartmentPrefix IS NULL;
+UPDATE gov.AccountTypeConfigurations SET DepartmentPrefix = 'PRV'
+WHERE AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'PRIVILEGED') AND DepartmentPrefix IS NULL;
+GO
+
 -- ── 4b. Migration: consolidate to 5 types with uppercase keys (idempotent) ────
 
 -- Rename lowercase type keys to uppercase

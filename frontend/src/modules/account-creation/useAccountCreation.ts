@@ -11,6 +11,7 @@ const BASE_FORM: AccountFormData = {
   accountName:    '',
   firstName:      '',
   apellidos:      '',
+  description:    '',
   recoveryEmail:  '',
   password:       '',
   passwordLength: 16,
@@ -77,8 +78,24 @@ export function useAccountCreation() {
   const preview = useMemo<AccountPreviewData | null>(() => {
     if (!selectedType || !typeInfo) return null;
     if (selectedType === 'PRIVILEGED' && !subTypeInfo) return null;
-    return computePreview(selectedType, form, typeInfo, subTypeInfo);
-  }, [selectedType, form, typeInfo, subTypeInfo]);
+    const base = computePreview(selectedType, form, typeInfo, subTypeInfo);
+
+    const sam  = base.sAMAccountName;
+    const mail = sam ? `${sam}@usfq.edu.ec` : null;
+
+    const prefix     = typeInfo.departmentPrefix;
+    const department = emailValidation.status === 'valid' && emailValidation.department
+      ? (prefix ? `${prefix}-${emailValidation.department}` : emailValidation.department)
+      : null;
+
+    return {
+      ...base,
+      mail,
+      department,
+      managerDn:          emailValidation.managerDn       ?? null,
+      managerDisplayName: emailValidation.userDisplayName ?? null,
+    };
+  }, [selectedType, form, typeInfo, subTypeInfo, emailValidation]);
 
   function updateField<K extends keyof AccountFormData>(key: K, value: AccountFormData[K]) {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -89,7 +106,11 @@ export function useAccountCreation() {
     const type = accountTypes.find(t => t.key === key);
     setSelectedType(key);
     setSelectedSubType(null);
-    setForm({ ...BASE_FORM, passwordLength: type?.defaultPasswordLength ?? 16 });
+    setForm({
+      ...BASE_FORM,
+      passwordLength: type?.defaultPasswordLength ?? 16,
+      description:    type?.descriptionTemplate    ?? '',
+    });
     setEmailValidation(IDLE_VALIDATION);
   }
 
@@ -129,6 +150,8 @@ export function useAccountCreation() {
         status:          result.isValid ? 'valid' : 'invalid',
         message:         result.message,
         userDisplayName: result.userDisplayName,
+        department:      result.department,
+        managerDn:       result.managerDn,
       });
     } catch {
       setEmailValidation({ status: 'invalid', message: 'Error al conectar con el servicio AD.' });

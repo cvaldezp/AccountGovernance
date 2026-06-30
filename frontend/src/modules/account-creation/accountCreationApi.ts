@@ -12,27 +12,27 @@ const MOCK_ACCOUNT_TYPES: AccountTypeInfo[] = [
   {
     key: 'GENERIC',    label: 'Genérica',    description: 'Usuarios internos estándar',
     badge: 'GEN', extensionAttribute14: 'Genérica', isPrivileged: false, defaultPasswordLength: 16,
-    defaultCompany: 'USFQ', descriptionTemplate: 'Genérica', subTypes: [],
+    defaultCompany: 'USFQ', descriptionTemplate: 'Genérica', departmentPrefix: 'GEN', subTypes: [],
   },
   {
     key: 'PARTNER',    label: 'Partner',     description: 'Socios externos o proveedores',
     badge: 'PTR', extensionAttribute14: 'PARTNERS', isPrivileged: false, defaultPasswordLength: 16,
-    defaultCompany: 'USFQ', descriptionTemplate: 'PARTNERS', subTypes: [],
+    defaultCompany: 'USFQ', descriptionTemplate: 'PARTNERS', departmentPrefix: 'PART', subTypes: [],
   },
   {
     key: 'SERVICE',    label: 'Servicio',    description: 'Servicios o aplicaciones',
     badge: 'SVC', extensionAttribute14: 'SERVICES', isPrivileged: false, defaultPasswordLength: 20,
-    defaultCompany: 'USFQ', descriptionTemplate: 'SERVICES', subTypes: [],
+    defaultCompany: 'USFQ', descriptionTemplate: 'SERVICES', departmentPrefix: 'SVC', subTypes: [],
   },
   {
     key: 'EXTENSION',  label: 'Extensión',   description: 'Extensión de usuario existente',
     badge: 'EXT', extensionAttribute14: 'EXTENSION', isPrivileged: false, defaultPasswordLength: 16,
-    defaultCompany: 'USFQ', descriptionTemplate: 'EXTENSION', subTypes: [],
+    defaultCompany: 'USFQ', descriptionTemplate: 'EXTENSION', departmentPrefix: 'EXT', subTypes: [],
   },
   {
     key: 'PRIVILEGED', label: 'Privilegiada', description: 'Cuentas con acceso elevado — selecciona el sub-tipo',
     badge: 'PRV', extensionAttribute14: 'PRIVILEGED', isPrivileged: true, defaultPasswordLength: 20,
-    defaultCompany: 'USFQ', descriptionTemplate: 'PRIVILEGED',
+    defaultCompany: 'USFQ', descriptionTemplate: 'PRIVILEGED', departmentPrefix: 'PRV',
     subTypes: [
       { key: 'OPERACIONES',    label: 'Operaciones',    samPrefix: 'op',    extensionAttribute14: 'PRIV_OP',  targetOU: 'OU=Privilegiadas,OU=Operaciones,DC=usfq,DC=edu,DC=ec',    isActive: true },
       { key: 'INFRAESTRUCTURA',label: 'Infraestructura',samPrefix: 'sa',    extensionAttribute14: 'PRIV_SA',  targetOU: 'OU=Privilegiadas,OU=Infraestructura,DC=usfq,DC=edu,DC=ec',isActive: true },
@@ -74,6 +74,7 @@ function mapApiType(raw: Record<string, unknown>): AccountTypeInfo {
     defaultPasswordLength: (raw.defaultPasswordLength as number) ?? 16,
     defaultCompany:        raw.defaultCompany         as string | null | undefined,
     descriptionTemplate:   (raw.descriptionTemplate   as string) ?? '',
+    departmentPrefix:      raw.departmentPrefix       as string | null | undefined,
     subTypes:              rawSubTypes.map(mapSubType),
   };
 }
@@ -88,6 +89,8 @@ export interface ValidateEmailResult {
   isValid:          boolean;
   message:          string;
   userDisplayName?: string;
+  department?:      string | null;
+  managerDn?:       string | null;
 }
 
 export const accountCreationApi = {
@@ -195,6 +198,7 @@ export const accountCreationApi = {
           apellidos:      form.apellidos,
           recoveryEmail:  form.recoveryEmail,
           password:       form.password,
+          description:    form.description,
         }),
       });
 
@@ -232,6 +236,8 @@ export const accountCreationApi = {
           givenName?: string | null; sn?: string | null; recoveryEmail?: string | null;
           targetOU?: string | null; accountTypeKey?: string; accountTypeLabel?: string;
           subTypeKey?: string | null; subTypeLabel?: string | null;
+          mail?: string | null; department?: string | null;
+          managerDn?: string | null; managerDisplayName?: string | null;
         } | null;
         checks: {
           configFound: boolean; samAvailable: boolean | null; upnAvailable: boolean | null;
@@ -258,6 +264,10 @@ export const accountCreationApi = {
               accountTypeLabel:     raw.preview.accountTypeLabel,
               subTypeKey:           raw.preview.subTypeKey,
               subTypeLabel:         raw.preview.subTypeLabel,
+              mail:                 raw.preview.mail,
+              department:           raw.preview.department,
+              managerDn:            raw.preview.managerDn,
+              managerDisplayName:   raw.preview.managerDisplayName,
             }
           : null,
         checks: raw.checks
@@ -301,6 +311,7 @@ export const accountCreationApi = {
           apellidos:     form.apellidos,
           recoveryEmail: form.recoveryEmail,
           password:      form.password,
+          description:   form.description,
         }),
       });
 

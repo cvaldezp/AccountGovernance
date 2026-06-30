@@ -11,7 +11,8 @@ public sealed record AccountCreationRequestDto(
     string? FirstName,
     string? Apellidos,
     string? RecoveryEmail,
-    string? Password
+    string? Password,
+    string? Description
 );
 
 public sealed record ValidationChecksDto(

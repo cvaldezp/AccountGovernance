@@ -29,6 +29,7 @@ public sealed partial class AccountCreationService(
             v.DefaultPasswordLength,
             v.DefaultCompany,
             v.DescriptionTemplate,
+            v.DepartmentPrefix,
             v.SubTypes.Select(s => new AccountSubTypeDto(
                 s.SubTypeKey, s.Label, s.SamPrefix, s.ExtensionAttribute14, s.TargetOU, s.IsActive
             )).ToList()
@@ -36,26 +37,42 @@ public sealed partial class AccountCreationService(
         return Result<IReadOnlyList<AccountTypeDto>>.Ok(dtos);
     }
 
-    public Task<Result<ValidateRecoveryEmailResponseDto>> ValidateRecoveryEmailAsync(
+    public async Task<Result<ValidateRecoveryEmailResponseDto>> ValidateRecoveryEmailAsync(
         ValidateRecoveryEmailRequestDto request, CancellationToken ct)
     {
         var email = (request.Email ?? string.Empty).Trim().ToLowerInvariant();
 
         if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
-            return Done(new ValidateRecoveryEmailResponseDto(false, "El correo no tiene un formato válido.", null));
+            return Result<ValidateRecoveryEmailResponseDto>.Ok(
+                new(false, "El correo no tiene un formato válido.", null, null, null));
 
-        if (email.EndsWith($"@{AdDomain}", StringComparison.Ordinal))
+        try
         {
-            var local       = email.Split('@')[0];
-            var displayName = string.Join(" ",
-                local.Split('.').Select(p => p.Length > 0 ? char.ToUpper(p[0]) + p[1..] : p));
+            var user = await adGateway.GetUserByUpnOrMailAsync(email, ct);
 
-            return Done(new ValidateRecoveryEmailResponseDto(
-                true, $"Usuario encontrado en AD: {displayName}", displayName));
+            if (user is null)
+                return Result<ValidateRecoveryEmailResponseDto>.Ok(
+                    new(false, "No se encontró un usuario en AD con ese correo de recuperación.", null, null, null));
+
+            if (!user.IsEnabled)
+                return Result<ValidateRecoveryEmailResponseDto>.Ok(
+                    new(false, $"El usuario '{user.DisplayName}' existe en AD pero está deshabilitado.", user.DisplayName, null, null));
+
+            return Result<ValidateRecoveryEmailResponseDto>.Ok(
+                new(true, $"Usuario encontrado: {user.DisplayName}", user.DisplayName, user.Department, user.DistinguishedName));
         }
-
-        return Done(new ValidateRecoveryEmailResponseDto(
-            false, "No se encontró un usuario en AD con ese correo de recuperación.", null));
+        catch
+        {
+            // AD not reachable — fall back to domain format check
+            var knownDomain = email.EndsWith($"@{AdDomain}", StringComparison.Ordinal)
+                           || email.EndsWith("@estud.usfq.edu.ec", StringComparison.Ordinal);
+            return Result<ValidateRecoveryEmailResponseDto>.Ok(
+                new(knownDomain,
+                    knownDomain
+                        ? "Servicio AD no disponible — formato válido pero sin verificar en directorio."
+                        : "No se pudo verificar el correo (AD no disponible) y el formato no es de dominio reconocido.",
+                    null, null, null));
+        }
     }
 
     public async Task<Result<AccountPreviewResponseDto>> PreviewAccountAsync(
@@ -93,6 +110,7 @@ public sealed partial class AccountCreationService(
         var company     = view.DefaultCompany ?? "USFQ";
         var description = view.DescriptionTemplate;
         var ea14        = view.ExtensionAttribute14;
+        var mail        = sam.Length > 0 ? $"{sam}@{AdDomain}" : (string?)null;
 
         return Result<AccountPreviewResponseDto>.Ok(new AccountPreviewResponseDto(
             UserPrincipalName:    $"{sam}@{AdDomain}",
@@ -108,7 +126,11 @@ public sealed partial class AccountCreationService(
             AccountTypeKey:       request.AccountTypeKey,
             AccountTypeLabel:     view.Label,
             SubTypeKey:           subTypeKey,
-            SubTypeLabel:         subTypeLabel
+            SubTypeLabel:         subTypeLabel,
+            Mail:                 mail,
+            Department:           null,
+            ManagerDn:            null,
+            ManagerDisplayName:   null
         ));
     }
 
@@ -155,34 +177,22 @@ public sealed partial class AccountCreationService(
             }
         }
 
-        // Required field: Cuenta
+        // Required fields
         if (string.IsNullOrWhiteSpace(request.AccountName))
             errors.Add("El campo 'Cuenta' es obligatorio.");
+        if (string.IsNullOrWhiteSpace(request.Description))
+            errors.Add("El detalle de la cuenta es obligatorio.");
 
         // Compute attributes
         var sam         = ComputeSamFromRequest(request, samPrefix);
         var upn         = sam.Length > 0 ? $"{sam}@{AdDomain}" : string.Empty;
         var displayName = ComputeDisplayNameFromRequest(request);
         var company     = view.DefaultCompany ?? "USFQ";
-        var description = view.DescriptionTemplate;
+        var description = !string.IsNullOrWhiteSpace(request.Description)
+            ? $"{view.DescriptionTemplate} - {request.Description.Trim()}"
+            : view.DescriptionTemplate;
         var ea14        = view.ExtensionAttribute14;
-
-        var preview = new AccountPreviewResponseDto(
-            UserPrincipalName:    upn,
-            SamAccountName:       sam,
-            DisplayName:          displayName,
-            Company:              company,
-            Description:          description,
-            ExtensionAttribute14: ea14,
-            GivenName:            request.FirstName?.Trim(),
-            Sn:                   request.Apellidos?.Trim(),
-            RecoveryEmail:        request.RecoveryEmail,
-            TargetOU:             targetOU,
-            AccountTypeKey:       request.AccountTypeKey,
-            AccountTypeLabel:     view.Label,
-            SubTypeKey:           request.SubTypeKey,
-            SubTypeLabel:         subTypeLabel
-        );
+        var mail        = sam.Length > 0 ? $"{sam}@{AdDomain}" : (string?)null;
 
         // Password check
         bool passwordValid = true;
@@ -206,12 +216,60 @@ public sealed partial class AccountCreationService(
         bool? upnAvailable       = null;
         bool? recoveryEmailValid = null;
         bool? ouValid            = null;
+        string? department         = null;
+        string? managerDn          = null;
+        string? managerDisplayName = null;
 
-        if (errors.Count == 0 || errors.All(e => e.StartsWith("La contraseña") || e.StartsWith("El correo")))
+        if (errors.Count == 0 || errors.All(e =>
+                e.StartsWith("La contraseña") ||
+                e.StartsWith("El correo") ||
+                e.StartsWith("La descripción")))
         {
             (samAvailable, upnAvailable, recoveryEmailValid, ouValid) =
                 await RunAdValidationsAsync(sam, upn, request.RecoveryEmail, targetOU, errors, warnings, ct);
+
+            // Post-AD: look up recovery user for department + manager (best-effort)
+            if (recoveryEmailValid == true && !string.IsNullOrWhiteSpace(request.RecoveryEmail))
+            {
+                try
+                {
+                    var recoveryUser = await adGateway.GetUserByUpnOrMailAsync(request.RecoveryEmail, ct);
+                    if (recoveryUser is not null)
+                    {
+                        var prefix = view.DepartmentPrefix;
+                        department = string.IsNullOrEmpty(recoveryUser.Department)
+                            ? null
+                            : string.IsNullOrEmpty(prefix)
+                                ? recoveryUser.Department
+                                : $"{prefix}-{recoveryUser.Department}";
+                        managerDn          = recoveryUser.DistinguishedName;
+                        managerDisplayName = recoveryUser.DisplayName;
+                    }
+                }
+                catch { /* best-effort */ }
+            }
         }
+
+        var preview = new AccountPreviewResponseDto(
+            UserPrincipalName:    upn,
+            SamAccountName:       sam,
+            DisplayName:          displayName,
+            Company:              company,
+            Description:          description,
+            ExtensionAttribute14: ea14,
+            GivenName:            request.FirstName?.Trim(),
+            Sn:                   request.Apellidos?.Trim(),
+            RecoveryEmail:        request.RecoveryEmail,
+            TargetOU:             targetOU,
+            AccountTypeKey:       request.AccountTypeKey,
+            AccountTypeLabel:     view.Label,
+            SubTypeKey:           request.SubTypeKey,
+            SubTypeLabel:         subTypeLabel,
+            Mail:                 mail,
+            Department:           department,
+            ManagerDn:            managerDn,
+            ManagerDisplayName:   managerDisplayName
+        );
 
         var checks = new ValidationChecksDto(
             ConfigFound:        true,
@@ -265,8 +323,33 @@ public sealed partial class AccountCreationService(
         var givenName   = request.FirstName?.Trim();
         var sn          = request.Apellidos?.Trim();
         var company     = view.DefaultCompany ?? "USFQ";
-        var description = view.DescriptionTemplate;
+        var description = !string.IsNullOrWhiteSpace(request.Description)
+            ? $"{view.DescriptionTemplate} - {request.Description.Trim()}"
+            : view.DescriptionTemplate;
         var ea14        = view.ExtensionAttribute14;
+        var mail        = $"{sam}@{AdDomain}";
+
+        // Look up recovery user for department + manager DN (best-effort)
+        string? department = null;
+        string? managerDn  = null;
+        if (!string.IsNullOrWhiteSpace(request.RecoveryEmail))
+        {
+            try
+            {
+                var recoveryUser = await adGateway.GetUserByUpnOrMailAsync(request.RecoveryEmail, ct);
+                if (recoveryUser is not null)
+                {
+                    var prefix = view.DepartmentPrefix;
+                    department = string.IsNullOrEmpty(recoveryUser.Department)
+                        ? null
+                        : string.IsNullOrEmpty(prefix)
+                            ? recoveryUser.Department
+                            : $"{prefix}-{recoveryUser.Department}";
+                    managerDn = recoveryUser.DistinguishedName;
+                }
+            }
+            catch { /* best-effort */ }
+        }
 
         if (string.IsNullOrWhiteSpace(targetOU))
             return Result<CreateAccountResponseDto>.Fail(
@@ -284,6 +367,9 @@ public sealed partial class AccountCreationService(
             Description:          description,
             ExtensionAttribute14: ea14,
             RecoveryEmail:        request.RecoveryEmail,
+            Mail:                 mail,
+            Department:           department,
+            ManagerDn:            managerDn,
             Password:             request.Password ?? string.Empty
         );
 
@@ -464,6 +550,4 @@ public sealed partial class AccountCreationService(
         return NonAlphanumericRegex().Replace(sb.ToString().ToLowerInvariant(), string.Empty);
     }
 
-    private static Task<Result<ValidateRecoveryEmailResponseDto>> Done(ValidateRecoveryEmailResponseDto dto) =>
-        Task.FromResult(Result<ValidateRecoveryEmailResponseDto>.Ok(dto));
 }

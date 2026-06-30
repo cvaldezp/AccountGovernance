@@ -23,8 +23,9 @@ public sealed class AccountTypeRepository(IDbConnectionFactory db) : IAccountTyp
             atc.DefaultPasswordLength,
             atc.DescriptionTemplate,
             atc.DefaultCompany,
-            atc.UpdatedAt  AS ConfigUpdatedAt,
-            atc.UpdatedBy  AS ConfigUpdatedBy
+            atc.UpdatedAt        AS ConfigUpdatedAt,
+            atc.UpdatedBy        AS ConfigUpdatedBy,
+            atc.DepartmentPrefix
         FROM  gov.AccountTypes           at
         INNER JOIN gov.AccountTypeConfigurations atc ON atc.AccountTypeId = at.Id
         """;
@@ -163,6 +164,7 @@ public sealed class AccountTypeRepository(IDbConnectionFactory db) : IAccountTyp
         r.DefaultCompany,
         r.ConfigUpdatedAt,
         r.ConfigUpdatedBy,
+        r.DepartmentPrefix,
         subTypes
     );
 
@@ -182,7 +184,8 @@ public sealed class AccountTypeRepository(IDbConnectionFactory db) : IAccountTyp
         string   DescriptionTemplate,
         string?  DefaultCompany,
         DateTime ConfigUpdatedAt,
-        string?  ConfigUpdatedBy);
+        string?  ConfigUpdatedBy,
+        string?  DepartmentPrefix);
 
     private sealed record SubTypeRow(
         int     Id,

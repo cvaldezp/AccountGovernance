@@ -19,6 +19,9 @@ public sealed record AdCreateUserRequest(
     string? Description,
     string? ExtensionAttribute14,
     string? RecoveryEmail,
+    string? Mail,
+    string? Department,
+    string? ManagerDn,
     string  Password              // Used inline only; never stored or logged
 );
 
@@ -43,6 +46,11 @@ public interface IAdGateway
 
     Task<User?> GetUserByAccountAsync(
         string samAccountName,
+        CancellationToken ct = default);
+
+    /// <summary>Returns a full user profile matching the given UPN or mail address, or null if not found.</summary>
+    Task<User?> GetUserByUpnOrMailAsync(
+        string upnOrMail,
         CancellationToken ct = default);
 
     // ── Pre-creation validation ───────────────────────────────────────────────

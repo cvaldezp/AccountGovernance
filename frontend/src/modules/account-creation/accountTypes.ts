@@ -38,7 +38,9 @@ export function computePreview(
     sAMAccountName:       sam,
     displayName:          computeDisplayName(form),
     company:              typeInfo.defaultCompany ?? 'USFQ',
-    description:          typeKey === 'GENERIC' ? 'Genérica' : typeInfo.descriptionTemplate,
+    description:          form.description.trim()
+                            ? `${typeInfo.descriptionTemplate} - ${form.description.trim()}`
+                            : typeInfo.descriptionTemplate,
     extensionAttribute14: typeInfo.extensionAttribute14,
     givenName:            form.firstName || null,
     sn:                   form.apellidos || null,

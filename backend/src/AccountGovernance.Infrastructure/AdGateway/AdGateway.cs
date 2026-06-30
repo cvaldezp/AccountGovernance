@@ -59,6 +59,15 @@ public sealed class AdGateway(
         return result.Users.Count > 0 ? result.Users[0] : null;
     }
 
+    public async Task<User?> GetUserByUpnOrMailAsync(
+        string upnOrMail, CancellationToken ct = default)
+    {
+        var esc    = EscapeLdap(upnOrMail);
+        var filter = $"(&(objectClass=user)(objectCategory=person)(|(userPrincipalName={esc})(mail={esc})))";
+        var result = await RunSearchAsync(upnOrMail, filter, 1, DetailFetchAttributes, ct);
+        return result.Users.Count > 0 ? result.Users[0] : null;
+    }
+
     // ── Pre-creation validation ────────────────────────────────────────────────
 
     public Task<bool> SamAccountNameExistsAsync(string sam, CancellationToken ct = default)
@@ -144,6 +153,12 @@ public sealed class AdGateway(
                     addReq.Attributes.Add(new DirectoryAttribute("extensionAttribute14", req.ExtensionAttribute14));
                 if (!string.IsNullOrWhiteSpace(req.RecoveryEmail))
                     addReq.Attributes.Add(new DirectoryAttribute("Custom-External-Email-Address", req.RecoveryEmail));
+                if (!string.IsNullOrWhiteSpace(req.Mail))
+                    addReq.Attributes.Add(new DirectoryAttribute("mail", req.Mail));
+                if (!string.IsNullOrWhiteSpace(req.Department))
+                    addReq.Attributes.Add(new DirectoryAttribute("department", req.Department));
+                if (!string.IsNullOrWhiteSpace(req.ManagerDn))
+                    addReq.Attributes.Add(new DirectoryAttribute("manager", req.ManagerDn));
 
                 conn.SendRequest(addReq);
 

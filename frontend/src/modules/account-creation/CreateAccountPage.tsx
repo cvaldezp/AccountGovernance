@@ -137,6 +137,7 @@ export function CreateAccountPage() {
     form.accountName.trim().length > 0 &&
     form.firstName.trim().length > 0 &&
     form.apellidos.trim().length > 0 &&
+    form.description.trim().length > 0 &&
     form.password.length > 0 &&
     emailValidation.status === 'valid';
 

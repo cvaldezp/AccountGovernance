@@ -10,5 +10,6 @@ public sealed record AccountTypeDto(
     int      DefaultPasswordLength,
     string?  DefaultCompany,
     string   DescriptionTemplate,
+    string?  DepartmentPrefix,
     IReadOnlyList<AccountSubTypeDto> SubTypes
 );

@@ -120,8 +120,12 @@ export function AccountPreview({ preview, source = 'local' }: Props) {
         <AttrRow label="userPrincipalName" value={preview.userPrincipalName} mono />
         <AttrRow label="sAMAccountName"    value={preview.sAMAccountName}    mono />
         <AttrRow label="displayName"       value={preview.displayName} />
-        {preview.company && <AttrRow label="company" value={preview.company} />}
+        {preview.company       && <AttrRow label="company"                    value={preview.company}              />}
         <AttrRow label="description"       value={preview.description} />
+        {preview.mail          && <AttrRow label="mail (cuenta)"               value={preview.mail}           mono  />}
+        {preview.department    && <AttrRow label="department"                 value={preview.department}           />}
+        {preview.managerDisplayName && <AttrRow label="manager"              value={preview.managerDisplayName}   />}
+        {preview.recoveryEmail && <AttrRow label="Correo de recuperación"     value={preview.recoveryEmail}  mono  />}
         <AttrRow label="extensionAttribute14" value={preview.extensionAttribute14} badge />
       </div>
 
@@ -160,6 +164,10 @@ export function AccountPreview({ preview, source = 'local' }: Props) {
           <AttrRow label="displayName"   value={preview.displayName} />
           <AttrRow label="company"       value={preview.company} />
           <AttrRow label="description"   value={preview.description} />
+          <AttrRow label="mail"          value={preview.mail}          mono />
+          <AttrRow label="department"    value={preview.department} />
+          <AttrRow label="manager (nombre)" value={preview.managerDisplayName} />
+          <AttrRow label="manager (DN)"     value={preview.managerDn}          mono />
           <AttrRow label="extensionAttribute14" value={preview.extensionAttribute14} mono />
           <AttrRow label="userPrincipalName"    value={preview.userPrincipalName}    mono />
           <AttrRow label="sAMAccountName"       value={preview.sAMAccountName}       mono />

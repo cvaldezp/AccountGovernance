@@ -66,6 +66,17 @@ export function DynamicAccountForm({
         />
       </div>
 
+      {/* ── Descripción ─────────────────────────────────────────────────── */}
+      <SectionLabel>Descripción</SectionLabel>
+
+      <AppInput
+        label="Detalle de la cuenta *"
+        placeholder="ej. Reportes Power BI, API Integración Banner, Salesforce Ecuador…"
+        value={form.description}
+        onChange={e => onFieldChange('description', e.target.value)}
+        hint="El sistema construye: TIPO - Detalle ingresado. Se asigna al atributo 'description' en AD."
+      />
+
       {/* ── Correo de recuperación ───────────────────────────────────────── */}
       <SectionLabel>Correo de recuperación</SectionLabel>
 

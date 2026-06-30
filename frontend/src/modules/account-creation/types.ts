@@ -30,6 +30,7 @@ export interface AccountTypeInfo {
   defaultPasswordLength: number;
   defaultCompany?:       string | null;
   descriptionTemplate:   string;
+  departmentPrefix?:     string | null;
   subTypes:              AccountSubTypeInfo[];
 }
 
@@ -37,6 +38,7 @@ export interface AccountFormData {
   accountName:    string;
   firstName:      string;
   apellidos:      string;
+  description:    string;
   recoveryEmail:  string;
   password:       string;
   passwordLength: number;
@@ -58,6 +60,10 @@ export interface AccountPreviewData {
   accountTypeLabel?:    string;
   subTypeKey?:          string | null;
   subTypeLabel?:        string | null;
+  mail?:                string | null;
+  department?:          string | null;
+  managerDn?:           string | null;
+  managerDisplayName?:  string | null;
 }
 
 export type EmailValidationStatus = 'idle' | 'loading' | 'valid' | 'invalid';
@@ -66,6 +72,8 @@ export interface RecoveryEmailValidation {
   status:           EmailValidationStatus;
   message:          string;
   userDisplayName?: string;
+  department?:      string | null;
+  managerDn?:       string | null;
 }
 
 // ── Creation flow ─────────────────────────────────────────────────────────────

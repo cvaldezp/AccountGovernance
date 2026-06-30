@@ -22,5 +22,9 @@ public sealed record AccountPreviewResponseDto(
     string  AccountTypeKey,
     string  AccountTypeLabel,
     string? SubTypeKey,
-    string? SubTypeLabel
+    string? SubTypeLabel,
+    string? Mail,
+    string? Department,
+    string? ManagerDn,
+    string? ManagerDisplayName
 );
