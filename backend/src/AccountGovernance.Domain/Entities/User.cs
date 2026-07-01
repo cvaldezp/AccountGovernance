@@ -24,9 +24,10 @@ public sealed class User
     public string?         Office            { get; init; }
 
     // ── Extension attributes ──────────────────────────────────────────────────
-    public string?         ExtensionAttribute1 { get; init; }
-    public string?         ExtensionAttribute2 { get; init; }
-    public string?         ExtensionAttribute3 { get; init; }
+    public string?         ExtensionAttribute1  { get; init; }
+    public string?         ExtensionAttribute2  { get; init; }
+    public string?         ExtensionAttribute3  { get; init; }
+    public string?         ExtensionAttribute13 { get; init; }
 
     // ── Account state ─────────────────────────────────────────────────────────
     public int?            UserAccountControl { get; init; }

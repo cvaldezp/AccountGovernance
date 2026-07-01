@@ -30,7 +30,7 @@ public sealed class AdGateway(
         "company", "department", "title", "manager",
         "physicalDeliveryOfficeName",
         "CustomBannerID",
-        "extensionAttribute1", "extensionAttribute2", "extensionAttribute3",
+        "extensionAttribute1", "extensionAttribute2", "extensionAttribute3", "extensionAttribute13",
         "userAccountControl", "whenCreated", "whenChanged",
         "lastLogonTimestamp", "distinguishedName",
     ];
@@ -249,75 +249,119 @@ public sealed class AdGateway(
 
     // ── Group operations ───────────────────────────────────────────────────────
 
-    public Task<AdGroupInfo?> GetGroupAsync(string dnOrName, CancellationToken ct = default)
+    private static readonly string[] GroupFetchAttributes =
+        ["cn", "distinguishedName", "objectGUID", "objectSid", "groupType"];
+
+    public Task<AdGroupSearchResult> GetGroupAsync(string query, CancellationToken ct = default)
     {
-        return Task.Run<AdGroupInfo?>(() =>
+        return Task.Run<AdGroupSearchResult>(() =>
         {
             using var conn = CreateConnection();
             conn.Bind();
 
-            var isDn    = dnOrName.Contains('=');
-            var escaped = EscapeLdap(dnOrName);
-            var filter  = isDn
-                ? $"(&(objectClass=group)(distinguishedName={escaped}))"
-                : $"(&(objectClass=group)(cn={escaped}))";
+            var isDn = query.Contains('=');
 
-            var req = new SearchRequest(
-                options.Value.BaseDn, filter, SearchScope.Subtree,
-                new[] { "cn", "distinguishedName", "objectGUID", "objectSid", "groupType" })
+            // ── DN lookup: use SearchScope.Base for an exact, efficient match ──
+            if (isDn)
             {
-                SizeLimit = 1,
-                TimeLimit = TimeSpan.FromSeconds(options.Value.TimeoutSeconds),
-            };
+                var req = new SearchRequest(
+                    query, "(objectClass=group)", SearchScope.Base, GroupFetchAttributes)
+                {
+                    SizeLimit = 1,
+                    TimeLimit = TimeSpan.FromSeconds(options.Value.TimeoutSeconds),
+                };
 
-            SearchResponse resp;
-            try
-            {
-                resp = (SearchResponse)conn.SendRequest(req);
-            }
-            catch (DirectoryOperationException ex)
-                when (ex.Response?.ResultCode == ResultCode.NoSuchObject)
-            {
-                return null;
-            }
-
-            if (resp.Entries.Count == 0) return null;
-
-            var entry = resp.Entries[0];
-            var name  = GetStringAttr(entry, "cn") ?? string.Empty;
-            var dn    = entry.DistinguishedName ?? GetStringAttr(entry, "distinguishedName") ?? string.Empty;
-
-            string? objectGuid = null;
-            var guidAttr = entry.Attributes["objectGUID"];
-            if (guidAttr?.Count > 0)
-            {
-                try { objectGuid = new Guid((byte[])guidAttr[0]).ToString(); }
-                catch { /* malformed */ }
-            }
-
-            string? sid = null;
-            var sidAttr = entry.Attributes["objectSid"];
-            if (sidAttr?.Count > 0)
-            {
+                SearchResponse resp;
                 try
                 {
-#pragma warning disable CA1416 // Windows-only API — this project runs on Windows AD infrastructure
-                    sid = new System.Security.Principal.SecurityIdentifier((byte[])sidAttr[0], 0).ToString();
-#pragma warning restore CA1416
+                    resp = (SearchResponse)conn.SendRequest(req);
                 }
-                catch { /* malformed */ }
+                catch (DirectoryOperationException ex)
+                    when (ex.Response?.ResultCode is ResultCode.NoSuchObject
+                                                 or ResultCode.InvalidDNSyntax)
+                {
+                    return new AdGroupSearchResult(null, false, null);
+                }
+
+                return resp.Entries.Count == 0
+                    ? new AdGroupSearchResult(null, false, null)
+                    : new AdGroupSearchResult(MapGroupEntry(resp.Entries[0]), false, null);
             }
 
-            int groupType = 0;
-            var typeAttr = entry.Attributes["groupType"];
-            if (typeAttr?.Count > 0)
-                int.TryParse(typeAttr[0]?.ToString(), out groupType);
+            // ── Name / sAMAccountName search — SizeLimit=2 to detect ambiguity ──
+            {
+                var escaped = EscapeLdap(query);
+                var filter  = $"(&(objectClass=group)(|(cn={escaped})(sAMAccountName={escaped})))";
 
-            // Bit 0x80000000 = Security group flag (stored as signed int)
-            var isSecurity = (groupType & unchecked((int)0x80000000)) != 0;
+                var req = new SearchRequest(
+                    options.Value.BaseDn, filter, SearchScope.Subtree, GroupFetchAttributes)
+                {
+                    SizeLimit = 2,
+                    TimeLimit = TimeSpan.FromSeconds(options.Value.TimeoutSeconds),
+                };
 
-            return new AdGroupInfo(name, dn, objectGuid, sid, isSecurity);
+                int matchCount = 0;
+                List<SearchResultEntry>? entries = null;
+
+                try
+                {
+                    var resp  = (SearchResponse)conn.SendRequest(req);
+                    matchCount = resp.Entries.Count;
+                    entries = [.. resp.Entries.Cast<SearchResultEntry>()];
+                }
+                catch (DirectoryOperationException ex)
+                    when (ex.Response is SearchResponse sr
+                       && sr.ResultCode == ResultCode.SizeLimitExceeded)
+                {
+                    // Server found ≥2 — it returned what it could before the limit
+                    matchCount = sr.Entries.Count > 0 ? sr.Entries.Count : 2;
+                    entries    = null; // treat as ambiguous
+                }
+
+                if (matchCount == 0)
+                    return new AdGroupSearchResult(null, false, null);
+
+                if (matchCount >= 2 || entries is null)
+                    return new AdGroupSearchResult(null, true, matchCount);
+
+                return new AdGroupSearchResult(MapGroupEntry(entries[0]), false, null);
+            }
         }, ct);
+    }
+
+    private static AdGroupInfo MapGroupEntry(SearchResultEntry entry)
+    {
+        var name = GetStringAttr(entry, "cn") ?? string.Empty;
+        var dn   = entry.DistinguishedName ?? GetStringAttr(entry, "distinguishedName") ?? string.Empty;
+
+        string? objectGuid = null;
+        var guidAttr = entry.Attributes["objectGUID"];
+        if (guidAttr?.Count > 0)
+        {
+            try { objectGuid = new Guid((byte[])guidAttr[0]).ToString(); }
+            catch { /* malformed */ }
+        }
+
+        string? sid = null;
+        var sidAttr = entry.Attributes["objectSid"];
+        if (sidAttr?.Count > 0)
+        {
+            try
+            {
+#pragma warning disable CA1416 // Windows-only API — this project runs on Windows AD infrastructure
+                sid = new System.Security.Principal.SecurityIdentifier((byte[])sidAttr[0], 0).ToString();
+#pragma warning restore CA1416
+            }
+            catch { /* malformed */ }
+        }
+
+        int groupType = 0;
+        var typeAttr = entry.Attributes["groupType"];
+        if (typeAttr?.Count > 0)
+            int.TryParse(typeAttr[0]?.ToString(), out groupType);
+
+        var isSecurity = (groupType & unchecked((int)0x80000000)) != 0;
+        return new AdGroupInfo(name, dn, objectGuid, sid, isSecurity);
     }
 
     public Task<bool> AddUserToGroupAsync(string userDn, string groupDn, CancellationToken ct = default)

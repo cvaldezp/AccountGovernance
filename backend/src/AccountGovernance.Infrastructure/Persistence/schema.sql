@@ -378,8 +378,9 @@ BEGIN
         GroupDn          NVARCHAR(512) NOT NULL,
         GroupObjectGuid  NVARCHAR(64)  NULL,
         GroupSid         NVARCHAR(256) NULL,
-        IsCritical       BIT           NOT NULL DEFAULT 1,
-        IsActive         BIT           NOT NULL DEFAULT 1,
+        IsCritical        BIT           NOT NULL DEFAULT 1,
+        ContinueOnFailure BIT           NOT NULL DEFAULT 1,
+        IsActive          BIT           NOT NULL DEFAULT 1,
         SortOrder        INT           NOT NULL DEFAULT 0,
         CreatedAt        DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
         UpdatedAt        DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
@@ -455,5 +456,18 @@ BEGIN
         ('RRHH',       'field-office',        1, 1, 1),
         ('RRHH',       'field-telephone',     1, 1, 1),
         ('RRHH',       'field-account-status',1, 0, 1);
+END
+GO
+
+-- ── Migration: add ContinueOnFailure to gov.AccountTypeInitialGroups ──────────
+IF NOT EXISTS (
+    
+    SELECT 1 FROM sys.columns
+    WHERE object_id = OBJECT_ID('gov.AccountTypeInitialGroups')
+      AND name = 'ContinueOnFailure'
+)
+BEGIN
+    ALTER TABLE gov.AccountTypeInitialGroups
+        ADD ContinueOnFailure BIT NOT NULL DEFAULT(1);
 END
 GO

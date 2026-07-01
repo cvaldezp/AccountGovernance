@@ -39,13 +39,14 @@ export const initialGroupsApi = {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({
-        groupName:       form.groupName,
-        groupDn:         form.groupDn,
-        groupObjectGuid: form.groupObjectGuid || null,
-        groupSid:        form.groupSid || null,
-        isCritical:      form.isCritical,
-        isActive:        form.isActive,
-        sortOrder:       form.sortOrder,
+        groupName:         form.groupName,
+        groupDn:           form.groupDn,
+        groupObjectGuid:   form.groupObjectGuid || null,
+        groupSid:          form.groupSid || null,
+        isCritical:        form.isCritical,
+        continueOnFailure: form.continueOnFailure,
+        isActive:          form.isActive,
+        sortOrder:         form.sortOrder,
       }),
     });
     return res.json() as Promise<InitialGroup>;
@@ -56,13 +57,14 @@ export const initialGroupsApi = {
       method:  'PUT',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({
-        groupName:       form.groupName,
-        groupDn:         form.groupDn,
-        groupObjectGuid: form.groupObjectGuid || null,
-        groupSid:        form.groupSid || null,
-        isCritical:      form.isCritical,
-        isActive:        form.isActive,
-        sortOrder:       form.sortOrder,
+        groupName:         form.groupName,
+        groupDn:           form.groupDn,
+        groupObjectGuid:   form.groupObjectGuid || null,
+        groupSid:          form.groupSid || null,
+        isCritical:        form.isCritical,
+        continueOnFailure: form.continueOnFailure,
+        isActive:          form.isActive,
+        sortOrder:         form.sortOrder,
       }),
     });
     return res.json() as Promise<InitialGroup>;

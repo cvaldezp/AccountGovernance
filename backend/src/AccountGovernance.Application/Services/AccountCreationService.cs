@@ -11,6 +11,7 @@ namespace AccountGovernance.Application.Services;
 public sealed partial class AccountCreationService(
     IAccountTypeRepository          accountTypeRepository,
     IAccountTypeGroupRepository     groupRepository,
+    IGroupAssignmentService         groupAssignmentService,
     IAdGateway                      adGateway,
     IAccountCreationAuditRepository auditRepository
 ) : IAccountCreationService
@@ -239,12 +240,7 @@ public sealed partial class AccountCreationService(
                     var recoveryUser = await adGateway.GetUserByUpnOrMailAsync(request.RecoveryEmail, ct);
                     if (recoveryUser is not null)
                     {
-                        var prefix = view.DepartmentPrefix;
-                        department = string.IsNullOrEmpty(recoveryUser.Department)
-                            ? null
-                            : string.IsNullOrEmpty(prefix)
-                                ? recoveryUser.Department
-                                : $"{prefix}-{recoveryUser.Department}";
+                        department         = BuildDepartmentValue(recoveryUser, view, warnings);
                         managerDn          = recoveryUser.DistinguishedName;
                         managerDisplayName = recoveryUser.DisplayName;
                     }
@@ -264,7 +260,7 @@ public sealed partial class AccountCreationService(
                 try
                 {
                     var adGroup = await adGateway.GetGroupAsync(grp.GroupDn, ct);
-                    exists = adGroup is not null;
+                    exists = adGroup.Group is not null;
                 }
                 catch { /* AD not reachable for group lookup */ }
 
@@ -360,6 +356,9 @@ public sealed partial class AccountCreationService(
         var ea14        = view.ExtensionAttribute14;
         var mail        = $"{sam}@{AdDomain}";
 
+        // Warnings accumulator — collects all non-fatal issues for the response
+        var warnings = new List<string>();
+
         // Look up recovery user for department + manager DN (best-effort)
         string? department = null;
         string? managerDn  = null;
@@ -370,13 +369,8 @@ public sealed partial class AccountCreationService(
                 var recoveryUser = await adGateway.GetUserByUpnOrMailAsync(request.RecoveryEmail, ct);
                 if (recoveryUser is not null)
                 {
-                    var prefix = view.DepartmentPrefix;
-                    department = string.IsNullOrEmpty(recoveryUser.Department)
-                        ? null
-                        : string.IsNullOrEmpty(prefix)
-                            ? recoveryUser.Department
-                            : $"{prefix}-{recoveryUser.Department}";
-                    managerDn = recoveryUser.DistinguishedName;
+                    department = BuildDepartmentValue(recoveryUser, view, warnings);
+                    managerDn  = recoveryUser.DistinguishedName;
                 }
             }
             catch { /* best-effort */ }
@@ -415,43 +409,24 @@ public sealed partial class AccountCreationService(
         }
 
         // ── Group assignments (only if user was created successfully) ──────────
+        // Account is NEVER deleted regardless of group assignment outcome.
         var groupResults = new List<GroupAssignmentResultDto>();
+
         if (adResult.Success)
         {
-            var groups = await groupRepository.GetForCreationAsync(view.Id, subTypeId, ct);
-            bool criticalFailed = false;
-
-            foreach (var grp in groups)
+            try
             {
-                bool assigned;
-                string? groupError = null;
-                try
-                {
-                    assigned = await adGateway.AddUserToGroupAsync(userDn, grp.GroupDn, ct);
-                    if (!assigned)
-                        groupError = $"AddUserToGroupAsync devolvió false para '{grp.GroupName}'.";
-                }
-                catch (Exception ex)
-                {
-                    assigned   = false;
-                    groupError = ex.Message;
-                }
+                var assignments = await groupAssignmentService.AssignGroupsAsync(
+                    view.Id, subTypeId, userDn, operatorUpn, ct);
 
-                groupResults.Add(new GroupAssignmentResultDto(grp.GroupName, assigned, assigned ? null : groupError));
+                groupResults.AddRange(assignments);
 
-                if (!assigned && grp.IsCritical)
-                    criticalFailed = true;
+                foreach (var r in groupResults.Where(r => !r.Success))
+                    warnings.Add($"Grupo '{r.GroupName}' no asignado: {r.Error}");
             }
-
-            if (criticalFailed)
+            catch (Exception ex)
             {
-                // Roll back user creation — delete the partially-provisioned account
-                await adGateway.DeleteUserAsync(userDn, ct);
-                adResult = new AdCreateUserResult(
-                    false,
-                    "Fallo al asignar un grupo crítico. La cuenta fue revertida. " +
-                    "Revise los grupos de la tabla gov.AccountTypeInitialGroups.",
-                    null);
+                warnings.Add($"Error inesperado durante la asignación de grupos: {ex.Message}");
             }
         }
 
@@ -485,7 +460,8 @@ public sealed partial class AccountCreationService(
         return adResult.Success
             ? Result<CreateAccountResponseDto>.Ok(
                 new CreateAccountResponseDto(true, adResult.Message, sam, upn, displayName,
-                    groupResults.Count > 0 ? groupResults : null))
+                    groupResults.Count > 0 ? groupResults : null,
+                    warnings.Count     > 0 ? warnings     : null))
             : Result<CreateAccountResponseDto>.Fail(adResult.Message, "AD_ERROR");
     }
 
@@ -610,6 +586,41 @@ public sealed partial class AccountCreationService(
             new[] { req.FirstName, req.Apellidos }
                 .Where(p => !string.IsNullOrWhiteSpace(p))
                 .Select(p => p!.Trim()));
+
+    /// <summary>
+    /// Builds the AD 'department' attribute value for a new account.
+    /// Primary source: extensionAttribute13 of the recovery user.
+    /// Fallback: department attribute of the recovery user (with warning).
+    /// Neither present: returns null and adds a warning.
+    /// Format: "{DepartmentPrefix}-{value}" or just "{value}" when no prefix is configured.
+    /// </summary>
+    private static string? BuildDepartmentValue(
+        User            recoveryUser,
+        AccountTypeView accountType,
+        IList<string>   warnings)
+    {
+        var prefix = accountType.DepartmentPrefix;
+
+        if (!string.IsNullOrEmpty(recoveryUser.ExtensionAttribute13))
+        {
+            var v = recoveryUser.ExtensionAttribute13;
+            return string.IsNullOrEmpty(prefix) ? v : $"{prefix}-{v}";
+        }
+
+        if (!string.IsNullOrEmpty(recoveryUser.Department))
+        {
+            warnings.Add(
+                "extensionAttribute13 no está definido en la cuenta de recuperación. " +
+                "Se utilizó el atributo 'department' como respaldo para el campo Department.");
+            var v = recoveryUser.Department;
+            return string.IsNullOrEmpty(prefix) ? v : $"{prefix}-{v}";
+        }
+
+        warnings.Add(
+            "La cuenta de recuperación no tiene definido extensionAttribute13 ni department. " +
+            "El atributo Department de la cuenta nueva quedará vacío.");
+        return null;
+    }
 
     [GeneratedRegex(@"[^a-z0-9]")]
     private static partial Regex NonAlphanumericRegex();

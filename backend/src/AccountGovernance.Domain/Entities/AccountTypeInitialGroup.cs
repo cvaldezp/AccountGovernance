@@ -9,8 +9,9 @@ public sealed class AccountTypeInitialGroup
     public string   GroupDn          { get; set; } = string.Empty;
     public string?  GroupObjectGuid  { get; set; }
     public string?  GroupSid         { get; set; }
-    public bool     IsCritical       { get; set; }
-    public bool     IsActive         { get; set; }
+    public bool     IsCritical        { get; set; }
+    public bool     ContinueOnFailure { get; set; }
+    public bool     IsActive          { get; set; }
     public int      SortOrder        { get; set; }
     public DateTime CreatedAt        { get; set; }
     public DateTime UpdatedAt        { get; set; }

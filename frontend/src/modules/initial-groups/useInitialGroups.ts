@@ -1,9 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { initialGroupsApi } from './initialGroupsApi';
 import type { InitialGroup, CreateGroupForm, AdGroupValidation } from './types';
 import { BLANK_GROUP_FORM } from './types';
-
-type ScopeKey = string; // "{typeKey}" or "{typeKey}|{subTypeKey}"
 
 export function useInitialGroups() {
   const [groups,  setGroups]  = useState<InitialGroup[]>([]);
@@ -46,13 +44,14 @@ export function useInitialGroups() {
   const startEdit = (group: InitialGroup) => {
     setEditingId(group.id);
     setEditForm({
-      groupName:       group.groupName,
-      groupDn:         group.groupDn,
-      groupObjectGuid: group.groupObjectGuid ?? '',
-      groupSid:        group.groupSid ?? '',
-      isCritical:      group.isCritical,
-      isActive:        group.isActive,
-      sortOrder:       group.sortOrder,
+      groupName:         group.groupName,
+      groupDn:           group.groupDn,
+      groupObjectGuid:   group.groupObjectGuid ?? '',
+      groupSid:          group.groupSid ?? '',
+      isCritical:        group.isCritical,
+      continueOnFailure: group.continueOnFailure,
+      isActive:          group.isActive,
+      sortOrder:         group.sortOrder,
     });
     setAdValidation(null);
     setSaveError(null);
@@ -75,12 +74,13 @@ export function useInitialGroups() {
     try {
       const result = await initialGroupsApi.validateAdGroup(editForm.groupDn.trim() || editForm.groupName.trim());
       setAdValidation(result);
-      if (result.isValid && result.groupName && !editForm.groupName) {
+      if (result.isValid) {
         setEditForm(prev => ({
           ...prev,
-          groupName:       result.groupName ?? prev.groupName,
-          groupObjectGuid: result.objectGuid ?? prev.groupObjectGuid,
-          groupSid:        result.sid ?? prev.groupSid,
+          groupName:       result.groupName  ?? prev.groupName,
+          groupDn:         result.dn          ?? prev.groupDn,
+          groupObjectGuid: result.objectGuid  ?? prev.groupObjectGuid,
+          groupSid:        result.sid         ?? prev.groupSid,
         }));
       }
     } finally {

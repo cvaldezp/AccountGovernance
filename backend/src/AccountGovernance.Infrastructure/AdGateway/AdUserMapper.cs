@@ -77,9 +77,10 @@ internal static class AdUserMapper
             Manager           = GetAttr(entry, "manager"),
             Office            = GetAttr(entry, "physicalDeliveryOfficeName"),
 
-            ExtensionAttribute1 = GetAttr(entry, "extensionAttribute1"),
-            ExtensionAttribute2 = GetAttr(entry, "extensionAttribute2"),
-            ExtensionAttribute3 = GetAttr(entry, "extensionAttribute3"),
+            ExtensionAttribute1  = GetAttr(entry, "extensionAttribute1"),
+            ExtensionAttribute2  = GetAttr(entry, "extensionAttribute2"),
+            ExtensionAttribute3  = GetAttr(entry, "extensionAttribute3"),
+            ExtensionAttribute13 = GetAttr(entry, "extensionAttribute13"),
 
             UserAccountControl = uacInt,
             IsEnabled          = enabled,

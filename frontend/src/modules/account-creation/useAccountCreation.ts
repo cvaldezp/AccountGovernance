@@ -83,15 +83,10 @@ export function useAccountCreation() {
     const sam  = base.sAMAccountName;
     const mail = sam ? `${sam}@usfq.edu.ec` : null;
 
-    const prefix     = typeInfo.departmentPrefix;
-    const department = emailValidation.status === 'valid' && emailValidation.department
-      ? (prefix ? `${prefix}-${emailValidation.department}` : emailValidation.department)
-      : null;
-
     return {
       ...base,
       mail,
-      department,
+      department:         null,
       managerDn:          emailValidation.managerDn       ?? null,
       managerDisplayName: emailValidation.userDisplayName ?? null,
     };

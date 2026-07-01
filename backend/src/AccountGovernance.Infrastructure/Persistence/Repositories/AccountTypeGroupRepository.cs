@@ -1,26 +1,30 @@
 using AccountGovernance.Application.Interfaces;
 using AccountGovernance.Domain.Entities;
 using Dapper;
+using Microsoft.Extensions.Logging;
 
 namespace AccountGovernance.Infrastructure.Persistence.Repositories;
 
-public sealed class AccountTypeGroupRepository(IDbConnectionFactory db) : IAccountTypeGroupRepository
+public sealed class AccountTypeGroupRepository(
+    IDbConnectionFactory                    db,
+    ILogger<AccountTypeGroupRepository>     logger
+) : IAccountTypeGroupRepository
 {
     private const string SelectBase = """
         SELECT g.Id, g.AccountTypeId, g.AccountSubTypeId, g.GroupName, g.GroupDn,
-               g.GroupObjectGuid, g.GroupSid, g.IsCritical, g.IsActive, g.SortOrder,
+               g.GroupObjectGuid, g.GroupSid, g.IsCritical, g.ContinueOnFailure, g.IsActive, g.SortOrder,
                g.CreatedAt, g.UpdatedAt, g.UpdatedBy,
-               at.TypeKey, ast.SubTypeKey
+               acct.TypeKey, ast.SubTypeKey
         FROM gov.AccountTypeInitialGroups g
-        JOIN gov.AccountTypes at ON at.Id = g.AccountTypeId
+        JOIN gov.AccountTypes acct ON acct.Id = g.AccountTypeId
         LEFT JOIN gov.AccountSubTypes ast ON ast.Id = g.AccountSubTypeId
-        """;
+        """ + "\n";
 
     public async Task<IReadOnlyList<AccountTypeInitialGroup>> GetByTypeKeyAsync(
         string typeKey, string? subTypeKey, bool activeOnly, CancellationToken ct)
     {
         var sql = SelectBase + """
-            WHERE at.TypeKey = @TypeKey
+            WHERE acct.TypeKey = @TypeKey
               AND (
                   (@SubTypeKey IS NULL AND g.AccountSubTypeId IS NULL)
                   OR
@@ -46,10 +50,25 @@ public sealed class AccountTypeGroupRepository(IDbConnectionFactory db) : IAccou
             ORDER BY g.SortOrder, g.Id
             """;
 
-        using var conn = db.Create();
-        var rows = await conn.QueryAsync<AccountTypeInitialGroup>(
-            sql, new { AccountTypeId = accountTypeId, AccountSubTypeId = accountSubTypeId });
-        return rows.AsList();
+        // [DIAG] Log SQL and params before execution to identify any syntax errors
+        logger.LogDebug(
+            "[GetForCreationAsync] params: AccountTypeId={AccountTypeId}, AccountSubTypeId={AccountSubTypeId} | SQL:\n{Sql}",
+            accountTypeId, accountSubTypeId, sql);
+
+        try
+        {
+            using var conn = db.Create();
+            var rows = await conn.QueryAsync<AccountTypeInitialGroup>(
+                sql, new { AccountTypeId = accountTypeId, AccountSubTypeId = accountSubTypeId });
+            return rows.AsList();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "[GetForCreationAsync] SQL FAILED — AccountTypeId={AccountTypeId}, AccountSubTypeId={AccountSubTypeId} | SQL:\n{Sql}",
+                accountTypeId, accountSubTypeId, sql);
+            throw;
+        }
     }
 
     public async Task<AccountTypeInitialGroup?> GetByIdAsync(int id, CancellationToken ct)
@@ -67,6 +86,7 @@ public sealed class AccountTypeGroupRepository(IDbConnectionFactory db) : IAccou
         string? groupObjectGuid,
         string? groupSid,
         bool    isCritical,
+        bool    continueOnFailure,
         bool    isActive,
         int     sortOrder,
         string  updatedBy,
@@ -75,12 +95,12 @@ public sealed class AccountTypeGroupRepository(IDbConnectionFactory db) : IAccou
         const string sql = """
             INSERT INTO gov.AccountTypeInitialGroups
                 (AccountTypeId, AccountSubTypeId, GroupName, GroupDn, GroupObjectGuid, GroupSid,
-                 IsCritical, IsActive, SortOrder, CreatedAt, UpdatedAt, UpdatedBy)
+                 IsCritical, ContinueOnFailure, IsActive, SortOrder, CreatedAt, UpdatedAt, UpdatedBy)
             VALUES (
                 (SELECT Id FROM gov.AccountTypes WHERE TypeKey = @TypeKey),
                 (SELECT Id FROM gov.AccountSubTypes WHERE SubTypeKey = @SubTypeKey),
                 @GroupName, @GroupDn, @GroupObjectGuid, @GroupSid,
-                @IsCritical, @IsActive, @SortOrder, GETUTCDATE(), GETUTCDATE(), @UpdatedBy
+                @IsCritical, @ContinueOnFailure, @IsActive, @SortOrder, GETUTCDATE(), GETUTCDATE(), @UpdatedBy
             );
             SELECT CAST(SCOPE_IDENTITY() AS INT);
             """;
@@ -91,7 +111,8 @@ public sealed class AccountTypeGroupRepository(IDbConnectionFactory db) : IAccou
             TypeKey = typeKey, SubTypeKey = subTypeKey,
             GroupName = groupName, GroupDn = groupDn,
             GroupObjectGuid = groupObjectGuid, GroupSid = groupSid,
-            IsCritical = isCritical, IsActive = isActive, SortOrder = sortOrder,
+            IsCritical = isCritical, ContinueOnFailure = continueOnFailure,
+            IsActive = isActive, SortOrder = sortOrder,
             UpdatedBy = updatedBy,
         });
     }
@@ -103,6 +124,7 @@ public sealed class AccountTypeGroupRepository(IDbConnectionFactory db) : IAccou
         string? groupObjectGuid,
         string? groupSid,
         bool    isCritical,
+        bool    continueOnFailure,
         bool    isActive,
         int     sortOrder,
         string  updatedBy,
@@ -110,15 +132,16 @@ public sealed class AccountTypeGroupRepository(IDbConnectionFactory db) : IAccou
     {
         const string sql = """
             UPDATE gov.AccountTypeInitialGroups
-            SET GroupName       = @GroupName,
-                GroupDn         = @GroupDn,
-                GroupObjectGuid = @GroupObjectGuid,
-                GroupSid        = @GroupSid,
-                IsCritical      = @IsCritical,
-                IsActive        = @IsActive,
-                SortOrder       = @SortOrder,
-                UpdatedAt       = GETUTCDATE(),
-                UpdatedBy       = @UpdatedBy
+            SET GroupName         = @GroupName,
+                GroupDn           = @GroupDn,
+                GroupObjectGuid   = @GroupObjectGuid,
+                GroupSid          = @GroupSid,
+                IsCritical        = @IsCritical,
+                ContinueOnFailure = @ContinueOnFailure,
+                IsActive          = @IsActive,
+                SortOrder         = @SortOrder,
+                UpdatedAt         = GETUTCDATE(),
+                UpdatedBy         = @UpdatedBy
             WHERE Id = @Id
             """;
 
@@ -127,7 +150,8 @@ public sealed class AccountTypeGroupRepository(IDbConnectionFactory db) : IAccou
         {
             Id = id, GroupName = groupName, GroupDn = groupDn,
             GroupObjectGuid = groupObjectGuid, GroupSid = groupSid,
-            IsCritical = isCritical, IsActive = isActive, SortOrder = sortOrder,
+            IsCritical = isCritical, ContinueOnFailure = continueOnFailure,
+            IsActive = isActive, SortOrder = sortOrder,
             UpdatedBy = updatedBy,
         });
     }

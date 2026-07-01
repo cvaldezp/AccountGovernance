@@ -59,17 +59,20 @@ function GroupForm({
   saveError:    string | null;
   saveLabel?:   string;
 }) {
+  const query    = form.groupDn.trim();
+  const isOuInput = /^ou=/i.test(query);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
         <div style={{ flex: 1 }}>
           <AppInput
-            label="DN del grupo *"
-            placeholder="CN=Nombre-Grupo,OU=Grupos,DC=usfq,DC=edu,DC=ec"
+            label="Grupo AD *"
+            placeholder="ej. GRP-Servicios  o  CN=GRP-Servicios,OU=Grupos,DC=usfq,DC=edu,DC=ec"
             value={form.groupDn}
             onChange={e => onFieldChange('groupDn', e.target.value)}
             style={{ fontFamily: 'var(--ds-font-mono)', fontSize: 'var(--ds-text-xs)' }}
-            hint="Ingresar el DN completo o el nombre del grupo para buscar en AD"
+            hint="Ingresa el nombre del grupo, sAMAccountName o DN completo."
           />
         </div>
         <AppButton
@@ -77,14 +80,27 @@ function GroupForm({
           size="sm"
           onClick={onValidate}
           loading={validating}
-          disabled={!form.groupDn.trim() && !form.groupName.trim()}
+          disabled={(!form.groupDn.trim() && !form.groupName.trim()) || isOuInput}
           style={{ flexShrink: 0 }}
         >
           Validar en AD
         </AppButton>
       </div>
 
-      {adValidation && <AdValidationBanner v={adValidation} />}
+      {isOuInput && (
+        <div style={{
+          padding:      '9px 12px',
+          borderRadius: 'var(--ds-radius-lg)',
+          fontSize:     'var(--ds-text-sm)',
+          background:   'var(--ds-warning-light, #fffbeb)',
+          border:       '1px solid var(--ds-warning-border, #fcd34d)',
+          color:        'var(--ds-warning-dark, #92400e)',
+        }}>
+          Ingresaste una OU, no un grupo. Debes ingresar el nombre del grupo o un DN que empiece con <code>CN=</code>.
+        </div>
+      )}
+
+      {!isOuInput && adValidation && <AdValidationBanner v={adValidation} />}
 
       <AppInput
         label="Nombre del grupo *"
@@ -124,8 +140,19 @@ function GroupForm({
           <span style={{ fontSize: 'var(--ds-text-sm)', color: 'var(--ds-neutral-700)', fontWeight: 600 }}>
             Grupo crítico
           </span>
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={form.continueOnFailure}
+            onChange={e => onFieldChange('continueOnFailure', e.target.checked)}
+            style={{ width: '16px', height: '16px', accentColor: 'var(--ds-brand-500)' }}
+          />
+          <span style={{ fontSize: 'var(--ds-text-sm)', color: 'var(--ds-neutral-700)' }}>
+            Continuar si falla
+          </span>
           <span style={{ fontSize: 'var(--ds-text-xs)', color: 'var(--ds-neutral-400)' }}>
-            (fallo revierte la creación)
+            (desmarcar para detener la cadena)
           </span>
         </label>
         <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
@@ -235,8 +262,9 @@ function GroupRow({
           <span style={{ fontWeight: 600, fontSize: 'var(--ds-text-sm)', color: 'var(--ds-neutral-900)' }}>
             {group.groupName}
           </span>
-          {group.isCritical && <AppBadge variant="danger" size="sm">crítico</AppBadge>}
-          {!group.isActive  && <AppBadge variant="neutral" size="sm">inactivo</AppBadge>}
+          {group.isCritical           && <AppBadge variant="danger"  size="sm">crítico</AppBadge>}
+          {!group.continueOnFailure   && <AppBadge variant="warning" size="sm">detiene</AppBadge>}
+          {!group.isActive            && <AppBadge variant="neutral" size="sm">inactivo</AppBadge>}
           {group.sortOrder > 0 && (
             <span style={{ fontSize: 'var(--ds-text-xs)', color: 'var(--ds-neutral-400)' }}>
               #{group.sortOrder}
@@ -405,7 +433,7 @@ export function InitialGroupsPage() {
           ) : (
             <AppCard
               title={`Grupos iniciales — ${scopeLabel}`}
-              description="Los grupos se asignan automáticamente al crear una cuenta de este tipo. Los grupos críticos revierten la creación si fallan."
+              description="Los grupos se asignan automáticamente al crear una cuenta de este tipo. Si un grupo falla, la cuenta siempre se conserva. Grupos con 'detiene' interrumpen la cadena si fallan."
             >
               {loading ? (
                 <div className="ds-loading">Cargando grupos…</div>

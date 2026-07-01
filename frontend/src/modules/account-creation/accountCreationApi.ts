@@ -331,6 +331,7 @@ export const accountCreationApi = {
         success: boolean; message: string;
         samAccountName?: string; userPrincipalName?: string; displayName?: string;
         groupAssignments?: Array<{ groupName: string; success: boolean; error: string | null }> | null;
+        warnings?: string[] | null;
       };
       return {
         success:           raw.success,
@@ -339,6 +340,7 @@ export const accountCreationApi = {
         userPrincipalName: raw.userPrincipalName,
         displayName:       raw.displayName,
         groupAssignments:  raw.groupAssignments ?? null,
+        warnings:          raw.warnings ?? null,
       };
     } catch (err) {
       return {

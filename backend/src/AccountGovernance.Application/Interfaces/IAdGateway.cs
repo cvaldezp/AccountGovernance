@@ -16,6 +16,16 @@ public sealed record AdGroupInfo(
     bool    IsSecurity
 );
 
+/// <summary>
+/// Result of a group search that may match 0, 1, or more than 1 group.
+/// When Ambiguous=true the caller should ask the user for a more specific query (full DN).
+/// </summary>
+public sealed record AdGroupSearchResult(
+    AdGroupInfo? Group,       // non-null only when exactly one group was found
+    bool         Ambiguous,   // true when 2+ groups matched the query
+    int?         MatchCount   // approximate count when Ambiguous=true
+);
+
 /// <summary>Full set of attributes needed to create an AD user account.</summary>
 public sealed record AdCreateUserRequest(
     string  UserDn,
@@ -86,8 +96,11 @@ public interface IAdGateway
 
     // ── Group operations ──────────────────────────────────────────────────────────
 
-    /// <summary>Looks up an AD group by DN (if input contains '=') or by CN. Returns null if not found.</summary>
-    Task<AdGroupInfo?> GetGroupAsync(string dnOrName, CancellationToken ct = default);
+    /// <summary>
+    /// Looks up an AD group by DN (when the query contains '='), by CN, or by sAMAccountName.
+    /// Returns Found (single match), NotFound, or Ambiguous (2+ matches).
+    /// </summary>
+    Task<AdGroupSearchResult> GetGroupAsync(string query, CancellationToken ct = default);
 
     /// <summary>Adds the user (by DN) as a member of the group (by DN). Returns true on success.</summary>
     Task<bool> AddUserToGroupAsync(string userDn, string groupDn, CancellationToken ct = default);

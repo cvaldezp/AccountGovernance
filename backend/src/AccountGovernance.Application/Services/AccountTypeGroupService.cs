@@ -31,7 +31,7 @@ public sealed class AccountTypeGroupService(
                 typeKey, dto.SubTypeKey,
                 dto.GroupName.Trim(), dto.GroupDn.Trim(),
                 dto.GroupObjectGuid?.Trim(), dto.GroupSid?.Trim(),
-                dto.IsCritical, dto.IsActive, dto.SortOrder,
+                dto.IsCritical, dto.ContinueOnFailure, dto.IsActive, dto.SortOrder,
                 updatedBy, ct);
 
             var created = await groupRepository.GetByIdAsync(id, ct);
@@ -62,7 +62,7 @@ public sealed class AccountTypeGroupService(
                 id,
                 dto.GroupName.Trim(), dto.GroupDn.Trim(),
                 dto.GroupObjectGuid?.Trim(), dto.GroupSid?.Trim(),
-                dto.IsCritical, dto.IsActive, dto.SortOrder,
+                dto.IsCritical, dto.ContinueOnFailure, dto.IsActive, dto.SortOrder,
                 updatedBy, ct);
 
             var refreshed = await groupRepository.GetByIdAsync(id, ct);
@@ -94,13 +94,21 @@ public sealed class AccountTypeGroupService(
 
         try
         {
-            var group = await adGateway.GetGroupAsync(query.Trim(), ct);
-            return group is null
+            var result = await adGateway.GetGroupAsync(query.Trim(), ct);
+
+            if (result.Ambiguous)
+                return Result<ValidateAdGroupResponseDto>.Ok(
+                    new(false, null, null, null, null, false,
+                        $"Búsqueda ambigua: se encontraron {result.MatchCount ?? 2} o más grupos con ese nombre. " +
+                        "Usa el DN completo para identificar el grupo exacto."));
+
+            return result.Group is null
                 ? Result<ValidateAdGroupResponseDto>.Ok(
                     new(false, null, null, null, null, false,
-                        $"No se encontró el grupo '{query}' en Active Directory."))
+                        $"No se encontró ningún grupo con el nombre o DN '{query}' en Active Directory."))
                 : Result<ValidateAdGroupResponseDto>.Ok(
-                    new(true, group.Name, group.Dn, group.ObjectGuid, group.Sid, group.IsSecurity, null));
+                    new(true, result.Group.Name, result.Group.Dn, result.Group.ObjectGuid,
+                        result.Group.Sid, result.Group.IsSecurity, null));
         }
         catch (Exception ex)
         {
@@ -112,6 +120,6 @@ public sealed class AccountTypeGroupService(
 
     private static AccountTypeGroupDto ToDto(AccountTypeInitialGroup g) =>
         new(g.Id, g.TypeKey, g.SubTypeKey, g.GroupName, g.GroupDn,
-            g.GroupObjectGuid, g.GroupSid, g.IsCritical, g.IsActive, g.SortOrder,
+            g.GroupObjectGuid, g.GroupSid, g.IsCritical, g.ContinueOnFailure, g.IsActive, g.SortOrder,
             g.UpdatedAt, g.UpdatedBy);
 }

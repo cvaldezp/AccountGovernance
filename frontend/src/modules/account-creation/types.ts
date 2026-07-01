@@ -124,4 +124,5 @@ export interface CreateResult {
   userPrincipalName?: string;
   displayName?:       string;
   groupAssignments?:  GroupAssignmentResult[] | null;
+  warnings?:          string[] | null;
 }

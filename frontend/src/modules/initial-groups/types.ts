@@ -1,26 +1,28 @@
 export interface InitialGroup {
-  id:             number;
-  typeKey:        string;
-  subTypeKey:     string | null;
-  groupName:      string;
-  groupDn:        string;
-  groupObjectGuid: string | null;
-  groupSid:       string | null;
-  isCritical:     boolean;
-  isActive:       boolean;
-  sortOrder:      number;
-  updatedAt:      string;
-  updatedBy:      string | null;
+  id:                number;
+  typeKey:           string;
+  subTypeKey:        string | null;
+  groupName:         string;
+  groupDn:           string;
+  groupObjectGuid:   string | null;
+  groupSid:          string | null;
+  isCritical:        boolean;
+  continueOnFailure: boolean;
+  isActive:          boolean;
+  sortOrder:         number;
+  updatedAt:         string;
+  updatedBy:         string | null;
 }
 
 export interface CreateGroupForm {
-  groupName:       string;
-  groupDn:         string;
-  groupObjectGuid: string;
-  groupSid:        string;
-  isCritical:      boolean;
-  isActive:        boolean;
-  sortOrder:       number;
+  groupName:         string;
+  groupDn:           string;
+  groupObjectGuid:   string;
+  groupSid:          string;
+  isCritical:        boolean;
+  continueOnFailure: boolean;
+  isActive:          boolean;
+  sortOrder:         number;
 }
 
 export interface AdGroupValidation {
@@ -34,11 +36,12 @@ export interface AdGroupValidation {
 }
 
 export const BLANK_GROUP_FORM: CreateGroupForm = {
-  groupName:       '',
-  groupDn:         '',
-  groupObjectGuid: '',
-  groupSid:        '',
-  isCritical:      true,
-  isActive:        true,
-  sortOrder:       0,
+  groupName:         '',
+  groupDn:           '',
+  groupObjectGuid:   '',
+  groupSid:          '',
+  isCritical:        true,
+  continueOnFailure: true,
+  isActive:          true,
+  sortOrder:         0,
 };

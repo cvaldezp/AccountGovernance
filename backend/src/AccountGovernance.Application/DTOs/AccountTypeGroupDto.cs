@@ -9,6 +9,7 @@ public sealed record AccountTypeGroupDto(
     string?  GroupObjectGuid,
     string?  GroupSid,
     bool     IsCritical,
+    bool     ContinueOnFailure,
     bool     IsActive,
     int      SortOrder,
     DateTime UpdatedAt,
@@ -21,9 +22,10 @@ public sealed record CreateAccountTypeGroupDto(
     string   GroupDn,
     string?  GroupObjectGuid,
     string?  GroupSid,
-    bool     IsCritical = true,
-    bool     IsActive   = true,
-    int      SortOrder  = 0
+    bool     IsCritical        = true,
+    bool     ContinueOnFailure = true,
+    bool     IsActive          = true,
+    int      SortOrder         = 0
 );
 
 public sealed record UpdateAccountTypeGroupDto(
@@ -32,6 +34,7 @@ public sealed record UpdateAccountTypeGroupDto(
     string?  GroupObjectGuid,
     string?  GroupSid,
     bool     IsCritical,
+    bool     ContinueOnFailure,
     bool     IsActive,
     int      SortOrder
 );
