@@ -13,7 +13,8 @@ public sealed partial class AccountCreationService(
     IAccountTypeGroupRepository     groupRepository,
     IGroupAssignmentService         groupAssignmentService,
     IAdGateway                      adGateway,
-    IAccountCreationAuditRepository auditRepository
+    IAccountCreationAuditRepository auditRepository,
+    IExpirationConfigRepository     expirationConfigRepository
 ) : IAccountCreationService
 {
     private const string AdDomain = "usfq.edu.ec";
@@ -274,6 +275,23 @@ public sealed partial class AccountCreationService(
         }
         catch { /* group config unavailable — non-blocking */ }
 
+        // Expiration — validate against global config, compute FileTime
+        var expiresRaw     = (long?)null;
+        var expirationDate = (DateOnly?)null;
+        var effectiveMode  = request.ExpirationMode;
+
+        if (!string.IsNullOrEmpty(request.ExpirationMode))
+        {
+            var expConfig = await expirationConfigRepository.GetAsync(ct);
+            ValidateExpirationOption(request.ExpirationMode, request.ExpirationMonths, expConfig, errors);
+
+            if (request.ExpirationMode != "never")
+            {
+                (expiresRaw, expirationDate) = AccountExpirationCalculator.Compute(
+                    request.ExpirationMode, request.ExpirationMonths, request.ExpirationDate, errors);
+            }
+        }
+
         var preview = new AccountPreviewResponseDto(
             UserPrincipalName:    upn,
             SamAccountName:       sam,
@@ -293,7 +311,10 @@ public sealed partial class AccountCreationService(
             Department:           department,
             ManagerDn:            managerDn,
             ManagerDisplayName:   managerDisplayName,
-            InitialGroups:        initialGroups.Count > 0 ? initialGroups : null
+            InitialGroups:        initialGroups.Count > 0 ? initialGroups : null,
+            ExpirationMode:       effectiveMode,
+            ExpirationDate:       expirationDate,
+            AccountExpiresRaw:    expiresRaw
         );
 
         var checks = new ValidationChecksDto(
@@ -380,6 +401,14 @@ public sealed partial class AccountCreationService(
             return Result<CreateAccountResponseDto>.Fail(
                 "No hay OU destino configurada para este tipo de cuenta.", "NO_TARGET_OU");
 
+        // Expiration — compute FileTime for AD accountExpires attribute
+        long? accountExpiresRaw = null;
+        if (!string.IsNullOrEmpty(request.ExpirationMode) && request.ExpirationMode != "never")
+        {
+            (accountExpiresRaw, _) = AccountExpirationCalculator.Compute(
+                request.ExpirationMode, request.ExpirationMonths, request.ExpirationDate, warnings);
+        }
+
         var userDn    = $"CN={EscapeDn(displayName)},{targetOU}";
         var adRequest = new AdCreateUserRequest(
             UserDn:               userDn,
@@ -395,7 +424,8 @@ public sealed partial class AccountCreationService(
             Mail:                 mail,
             Department:           department,
             ManagerDn:            managerDn,
-            Password:             request.Password ?? string.Empty
+            Password:             request.Password ?? string.Empty,
+            AccountExpiresRaw:    accountExpiresRaw
         );
 
         AdCreateUserResult adResult;
@@ -463,6 +493,38 @@ public sealed partial class AccountCreationService(
                     groupResults.Count > 0 ? groupResults : null,
                     warnings.Count     > 0 ? warnings     : null))
             : Result<CreateAccountResponseDto>.Fail(adResult.Message, "AD_ERROR");
+    }
+
+    // ── Expiration validation ─────────────────────────────────────────────────
+
+    private static void ValidateExpirationOption(
+        string                mode,
+        int?                  months,
+        Domain.Entities.ExpirationGlobalConfig? config,
+        IList<string>         errors)
+    {
+        if (config is null) return; // no config = all options allowed
+
+        if (mode == "never")
+        {
+            if (!config.AllowNoExpiration)
+                errors.Add("La opción 'Sin expiración' no está habilitada por la configuración.");
+            return;
+        }
+
+        if (mode == "months")
+        {
+            if (months is null or <= 0)
+            { errors.Add("Se requiere el número de meses para la vigencia."); return; }
+
+            var allowed = AccountExpirationCalculator.ParseMonths(config.AllowedMonthsCsv);
+            if (!allowed.Contains(months.Value))
+                errors.Add($"La duración de {months} mes(es) no está habilitada por la configuración.");
+            return;
+        }
+
+        if (mode == "custom" && !config.AllowCustomDate)
+            errors.Add("La fecha específica de vencimiento no está habilitada por la configuración.");
     }
 
     // ── AD validation helpers ─────────────────────────────────────────────────

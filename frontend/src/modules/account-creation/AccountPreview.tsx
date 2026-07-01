@@ -127,6 +127,14 @@ export function AccountPreview({ preview, source = 'local' }: Props) {
         {preview.managerDisplayName && <AttrRow label="manager"              value={preview.managerDisplayName}   />}
         {preview.recoveryEmail && <AttrRow label="Correo de recuperación"     value={preview.recoveryEmail}  mono  />}
         <AttrRow label="extensionAttribute14" value={preview.extensionAttribute14} badge />
+        {preview.expirationMode && preview.expirationMode !== 'never' && (
+          <AttrRow
+            label="vigencia"
+            value={preview.expirationDate
+              ? `Vence el ${preview.expirationDate}`
+              : 'Con fecha de vencimiento'}
+          />
+        )}
       </div>
 
       {/* ── Grupos iniciales ─────────────────────────────────────────── */}
@@ -238,6 +246,13 @@ export function AccountPreview({ preview, source = 'local' }: Props) {
             label="userAccountControl"
             value="514 (deshabilitado al crear) → 512 (habilitado tras password)"
           />
+          {preview.accountExpiresRaw != null && (
+            <AttrRow
+              label="accountExpires"
+              value={`${preview.accountExpiresRaw} (${preview.expirationDate ?? 'FileTime'})`}
+              mono
+            />
+          )}
           <OuRow value={preview.targetOU} />
 
           <div style={{ borderTop: '1px solid var(--ds-neutral-200)', marginTop: '4px', paddingTop: '8px' }}>

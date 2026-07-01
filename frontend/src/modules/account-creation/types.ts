@@ -34,14 +34,20 @@ export interface AccountTypeInfo {
   subTypes:              AccountSubTypeInfo[];
 }
 
+export type ExpirationMode = 'never' | 'months' | 'custom';
+
 export interface AccountFormData {
-  accountName:    string;
-  firstName:      string;
-  apellidos:      string;
-  description:    string;
-  recoveryEmail:  string;
-  password:       string;
-  passwordLength: number;
+  accountName:      string;
+  firstName:        string;
+  apellidos:        string;
+  description:      string;
+  recoveryEmail:    string;
+  password:         string;
+  passwordLength:   number;
+  // expiration
+  expirationMode:   ExpirationMode | '';
+  expirationMonths: number | null;
+  expirationDate:   string | null;   // 'YYYY-MM-DD'
 }
 
 export interface InitialGroupPreview {
@@ -79,6 +85,16 @@ export interface AccountPreviewData {
   managerDn?:           string | null;
   managerDisplayName?:  string | null;
   initialGroups?:       InitialGroupPreview[] | null;
+  // expiration
+  expirationMode?:      ExpirationMode | null;
+  expirationDate?:      string | null;   // 'YYYY-MM-DD'
+  accountExpiresRaw?:   number | null;
+}
+
+export interface ExpirationConfig {
+  allowNoExpiration: boolean;
+  allowCustomDate:   boolean;
+  allowedMonths:     number[];
 }
 
 export type EmailValidationStatus = 'idle' | 'loading' | 'valid' | 'invalid';

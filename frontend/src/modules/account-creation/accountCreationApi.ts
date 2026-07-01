@@ -2,6 +2,7 @@ import { computePreview } from './accountTypes';
 import type {
   AccountTypeInfo, AccountTypeKey, AccountSubTypeInfo, AccountSubTypeKey,
   AccountFormData, AccountPreviewData, ValidationResult, CreateResult,
+  ExpirationConfig, ExpirationMode,
 } from './types';
 
 // ── Mock fallback — read-only data only ────────────────────────────────────────
@@ -191,14 +192,17 @@ export const accountCreationApi = {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          accountTypeKey: typeKey,
+          accountTypeKey:   typeKey,
           subTypeKey,
-          accountName:    form.accountName,
-          firstName:      form.firstName,
-          apellidos:      form.apellidos,
-          recoveryEmail:  form.recoveryEmail,
-          password:       form.password,
-          description:    form.description,
+          accountName:      form.accountName,
+          firstName:        form.firstName,
+          apellidos:        form.apellidos,
+          recoveryEmail:    form.recoveryEmail,
+          password:         form.password,
+          description:      form.description,
+          expirationMode:   form.expirationMode   || null,
+          expirationMonths: form.expirationMonths || null,
+          expirationDate:   form.expirationDate   || null,
         }),
       });
 
@@ -241,6 +245,9 @@ export const accountCreationApi = {
           initialGroups?: Array<{
             id: number; groupName: string; groupDn: string; isCritical: boolean; existsInAd: boolean | null;
           }> | null;
+          expirationMode?: string | null;
+          expirationDate?: string | null;
+          accountExpiresRaw?: number | null;
         } | null;
         checks: {
           configFound: boolean; samAvailable: boolean | null; upnAvailable: boolean | null;
@@ -272,6 +279,9 @@ export const accountCreationApi = {
               managerDn:            raw.preview.managerDn,
               managerDisplayName:   raw.preview.managerDisplayName,
               initialGroups:        raw.preview.initialGroups ?? null,
+              expirationMode:       (raw.preview.expirationMode as ExpirationMode | null | undefined) ?? null,
+              expirationDate:       raw.preview.expirationDate ?? null,
+              accountExpiresRaw:    raw.preview.accountExpiresRaw ?? null,
             }
           : null,
         checks: raw.checks
@@ -308,14 +318,17 @@ export const accountCreationApi = {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          accountTypeKey: typeKey,
+          accountTypeKey:   typeKey,
           subTypeKey,
-          accountName:   form.accountName,
-          firstName:     form.firstName,
-          apellidos:     form.apellidos,
-          recoveryEmail: form.recoveryEmail,
-          password:      form.password,
-          description:   form.description,
+          accountName:      form.accountName,
+          firstName:        form.firstName,
+          apellidos:        form.apellidos,
+          recoveryEmail:    form.recoveryEmail,
+          password:         form.password,
+          description:      form.description,
+          expirationMode:   form.expirationMode   || null,
+          expirationMonths: form.expirationMonths || null,
+          expirationDate:   form.expirationDate   || null,
         }),
       });
 
@@ -347,6 +360,26 @@ export const accountCreationApi = {
         success: false,
         message: `No se pudo conectar con el servidor: ${errorMessage(err)}`,
       };
+    }
+  },
+
+  // Returns the global expiration config; null means fetch failed (treat as all allowed).
+  async getExpirationConfig(): Promise<ExpirationConfig | null> {
+    try {
+      const res = await apiFetch('/api/expiration-config');
+      if (!res.ok) return null;
+      const raw = await res.json() as {
+        allowNoExpiration: boolean;
+        allowCustomDate:   boolean;
+        allowedMonths:     number[];
+      };
+      return {
+        allowNoExpiration: raw.allowNoExpiration,
+        allowCustomDate:   raw.allowCustomDate,
+        allowedMonths:     raw.allowedMonths ?? [],
+      };
+    } catch {
+      return null;
     }
   },
 };

@@ -18,6 +18,7 @@ export function CreateAccountPage() {
     form,
     preview,
     emailValidation,
+    expirationConfig,
     creationStep,
     validationResult,
     createResult,
@@ -165,6 +166,7 @@ export function CreateAccountPage() {
           <DynamicAccountForm
             form={form}
             emailValidation={emailValidation}
+            expirationConfig={expirationConfig}
             onFieldChange={updateField}
             onValidateEmail={validateRecoveryEmail}
             onGenPassword={generatePassword}

@@ -41,7 +41,8 @@ public sealed record AdCreateUserRequest(
     string? Mail,
     string? Department,
     string? ManagerDn,
-    string  Password              // Used inline only; never stored or logged
+    string  Password,             // Used inline only; never stored or logged
+    long?   AccountExpiresRaw = null  // Windows FileTime; null = omit attribute (never expires)
 );
 
 public sealed record AdCreateUserResult(

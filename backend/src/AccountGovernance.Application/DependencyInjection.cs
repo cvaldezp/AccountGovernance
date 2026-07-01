@@ -1,3 +1,4 @@
+using AccountGovernance.Application.Interfaces;
 using AccountGovernance.Application.Services;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -7,14 +8,14 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
-        services.AddScoped<IUserService,            UserService>();
-        services.AddScoped<IAuditService,           AuditService>();
-        services.AddScoped<IPermissionService,      PermissionService>();
-        services.AddScoped<IDashboardService,       DashboardService>();
-        services.AddScoped<IAccountCreationService,  AccountCreationService>();
-        services.AddScoped<IAccountTypeAdminService, AccountTypeAdminService>();
-        services.AddScoped<IAccountTypeGroupService, AccountTypeGroupService>();
-        services.AddScoped<IGroupAssignmentService,  GroupAssignmentService>();
+        services.AddScoped<IUserService,                     UserService>();
+        services.AddScoped<IAuditService,                    AuditService>();
+        services.AddScoped<IPermissionService,               PermissionService>();
+        services.AddScoped<IDashboardService,                DashboardService>();
+        services.AddScoped<IAccountCreationService,          AccountCreationService>();
+        services.AddScoped<IAccountTypeAdminService,         AccountTypeAdminService>();
+        services.AddScoped<IAccountTypeGroupService,         AccountTypeGroupService>();
+        services.AddScoped<IGroupAssignmentService,          GroupAssignmentService>();
         return services;
     }
 }

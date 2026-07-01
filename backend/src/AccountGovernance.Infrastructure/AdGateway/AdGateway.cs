@@ -159,6 +159,8 @@ public sealed class AdGateway(
                     addReq.Attributes.Add(new DirectoryAttribute("department", req.Department));
                 if (!string.IsNullOrWhiteSpace(req.ManagerDn))
                     addReq.Attributes.Add(new DirectoryAttribute("manager", req.ManagerDn));
+                if (req.AccountExpiresRaw.HasValue)
+                    addReq.Attributes.Add(new DirectoryAttribute("accountExpires", req.AccountExpiresRaw.Value.ToString()));
 
                 conn.SendRequest(addReq);
 

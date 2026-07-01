@@ -2,19 +2,22 @@ import { useState, useMemo, useEffect } from 'react';
 import type {
   AccountTypeKey, AccountSubTypeKey, AccountTypeInfo, AccountSubTypeInfo,
   AccountFormData, AccountPreviewData, RecoveryEmailValidation,
-  CreationStep, ValidationResult, CreateResult,
+  CreationStep, ValidationResult, CreateResult, ExpirationConfig,
 } from './types';
 import { computePreview } from './accountTypes';
 import { accountCreationApi } from './accountCreationApi';
 
 const BASE_FORM: AccountFormData = {
-  accountName:    '',
-  firstName:      '',
-  apellidos:      '',
-  description:    '',
-  recoveryEmail:  '',
-  password:       '',
-  passwordLength: 16,
+  accountName:      '',
+  firstName:        '',
+  apellidos:        '',
+  description:      '',
+  recoveryEmail:    '',
+  password:         '',
+  passwordLength:   16,
+  expirationMode:   '',
+  expirationMonths: null,
+  expirationDate:   null,
 };
 
 const IDLE_VALIDATION: RecoveryEmailValidation = { status: 'idle', message: '' };
@@ -47,12 +50,13 @@ function generateSecurePassword(length: number): string {
 }
 
 export function useAccountCreation() {
-  const [accountTypes,    setAccountTypes]    = useState<AccountTypeInfo[]>([]);
-  const [typesLoading,    setTypesLoading]    = useState(true);
-  const [selectedType,    setSelectedType]    = useState<AccountTypeKey | null>(null);
-  const [selectedSubType, setSelectedSubType] = useState<AccountSubTypeKey | null>(null);
-  const [form,            setForm]            = useState<AccountFormData>(BASE_FORM);
-  const [emailValidation, setEmailValidation] = useState<RecoveryEmailValidation>(IDLE_VALIDATION);
+  const [accountTypes,     setAccountTypes]     = useState<AccountTypeInfo[]>([]);
+  const [typesLoading,     setTypesLoading]     = useState(true);
+  const [selectedType,     setSelectedType]     = useState<AccountTypeKey | null>(null);
+  const [selectedSubType,  setSelectedSubType]  = useState<AccountSubTypeKey | null>(null);
+  const [form,             setForm]             = useState<AccountFormData>(BASE_FORM);
+  const [emailValidation,  setEmailValidation]  = useState<RecoveryEmailValidation>(IDLE_VALIDATION);
+  const [expirationConfig, setExpirationConfig] = useState<ExpirationConfig | null>(null);
 
   // Creation flow
   const [creationStep,      setCreationStep]      = useState<CreationStep>('form');
@@ -60,9 +64,13 @@ export function useAccountCreation() {
   const [createResult,      setCreateResult]      = useState<CreateResult | null>(null);
 
   useEffect(() => {
-    accountCreationApi.getAccountTypes()
-      .then(types => setAccountTypes(types))
-      .finally(() => setTypesLoading(false));
+    Promise.all([
+      accountCreationApi.getAccountTypes(),
+      accountCreationApi.getExpirationConfig(),
+    ]).then(([types, config]) => {
+      setAccountTypes(types);
+      setExpirationConfig(config);
+    }).finally(() => setTypesLoading(false));
   }, []);
 
   const typeInfo = useMemo(
@@ -101,12 +109,12 @@ export function useAccountCreation() {
     const type = accountTypes.find(t => t.key === key);
     setSelectedType(key);
     setSelectedSubType(null);
+    setEmailValidation(IDLE_VALIDATION);
     setForm({
       ...BASE_FORM,
       passwordLength: type?.defaultPasswordLength ?? 16,
       description:    type?.descriptionTemplate    ?? '',
     });
-    setEmailValidation(IDLE_VALIDATION);
   }
 
   function selectSubType(key: AccountSubTypeKey) {
@@ -210,6 +218,7 @@ export function useAccountCreation() {
     form,
     preview,
     emailValidation,
+    expirationConfig,
     creationStep,
     validationResult,
     createResult,

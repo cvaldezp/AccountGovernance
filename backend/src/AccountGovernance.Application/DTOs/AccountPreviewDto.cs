@@ -27,5 +27,8 @@ public sealed record AccountPreviewResponseDto(
     string? Department,
     string? ManagerDn,
     string? ManagerDisplayName,
-    IReadOnlyList<InitialGroupPreviewDto>? InitialGroups = null
+    IReadOnlyList<InitialGroupPreviewDto>? InitialGroups  = null,
+    string?   ExpirationMode    = null,   // 'never' | 'months' | 'custom'
+    DateOnly? ExpirationDate    = null,
+    long?     AccountExpiresRaw = null
 );

@@ -461,7 +461,7 @@ GO
 
 -- ── Migration: add ContinueOnFailure to gov.AccountTypeInitialGroups ──────────
 IF NOT EXISTS (
-    
+
     SELECT 1 FROM sys.columns
     WHERE object_id = OBJECT_ID('gov.AccountTypeInitialGroups')
       AND name = 'ContinueOnFailure'
@@ -470,4 +470,33 @@ BEGIN
     ALTER TABLE gov.AccountTypeInitialGroups
         ADD ContinueOnFailure BIT NOT NULL DEFAULT(1);
 END
+GO
+
+-- ── 10. Global expiration configuration (singleton) ──────────────────────────
+-- One row controls which expiration options are available system-wide.
+-- The operator picks the actual expiration date at account-creation time.
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.tables t
+    JOIN sys.schemas s ON t.schema_id = s.schema_id
+    WHERE t.name = 'ExpirationGlobalConfig' AND s.name = 'gov'
+)
+BEGIN
+    CREATE TABLE gov.ExpirationGlobalConfig (
+        Id                INT           NOT NULL IDENTITY(1,1) PRIMARY KEY,
+        AllowNoExpiration BIT           NOT NULL DEFAULT 1,  -- allow "Sin expiración"
+        AllowCustomDate   BIT           NOT NULL DEFAULT 1,  -- allow "Fecha específica"
+        AllowedMonthsCsv  NVARCHAR(100) NOT NULL DEFAULT '1,2,3,6,9,12,18,24,36,48,60',
+        UpdatedAt         DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+        UpdatedBy         NVARCHAR(200) NULL
+    );
+END
+GO
+
+-- Seed: ensure exactly one config row exists
+IF NOT EXISTS (SELECT 1 FROM gov.ExpirationGlobalConfig)
+    INSERT INTO gov.ExpirationGlobalConfig
+        (AllowNoExpiration, AllowCustomDate, AllowedMonthsCsv)
+    VALUES
+        (1, 1, '1,2,3,6,9,12,18,24,36,48,60');
 GO

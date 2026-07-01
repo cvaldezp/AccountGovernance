@@ -5,14 +5,17 @@ namespace AccountGovernance.Application.DTOs;
 /// Password is never logged or persisted in audit.
 /// </summary>
 public sealed record AccountCreationRequestDto(
-    string  AccountTypeKey,
-    string? SubTypeKey,
-    string? AccountName,
-    string? FirstName,
-    string? Apellidos,
-    string? RecoveryEmail,
-    string? Password,
-    string? Description
+    string    AccountTypeKey,
+    string?   SubTypeKey,
+    string?   AccountName,
+    string?   FirstName,
+    string?   Apellidos,
+    string?   RecoveryEmail,
+    string?   Password,
+    string?   Description,
+    string?   ExpirationMode   = null,   // 'never' | 'months' | 'custom'
+    int?      ExpirationMonths = null,   // required when mode = 'months'
+    DateOnly? ExpirationDate   = null    // required when mode = 'custom'
 );
 
 public sealed record ValidationChecksDto(

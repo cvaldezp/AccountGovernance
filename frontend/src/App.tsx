@@ -23,7 +23,7 @@ function RouterView() {
     case 'attribute-catalog':   return <AttributeCatalogPage />;
     case 'permissions-matrix':  return <PermissionsMatrixPage />;
     case 'account-type-config': return <AccountTypeConfigPage />;
-    case 'initial-groups':      return <InitialGroupsPage />;
+    case 'initial-groups':       return <InitialGroupsPage />;
     default:                 return <DashboardPage />;
   }
 }

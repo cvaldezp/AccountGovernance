@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { AppInput, AppButton } from '../../shared/ui';
-import type { AccountFormData, RecoveryEmailValidation } from './types';
+import type { AccountFormData, RecoveryEmailValidation, ExpirationConfig } from './types';
+import { ExpirationSection } from './ExpirationSection';
 
 const PASSWORD_LENGTHS = [12, 14, 16, 20, 24, 32];
 
 interface Props {
-  form:            AccountFormData;
-  emailValidation: RecoveryEmailValidation;
-  onFieldChange:   <K extends keyof AccountFormData>(key: K, value: AccountFormData[K]) => void;
-  onValidateEmail: () => void;
-  onGenPassword:   () => void;
+  form:             AccountFormData;
+  emailValidation:  RecoveryEmailValidation;
+  expirationConfig: ExpirationConfig | null;
+  onFieldChange:    <K extends keyof AccountFormData>(key: K, value: AccountFormData[K]) => void;
+  onValidateEmail:  () => void;
+  onGenPassword:    () => void;
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -31,6 +33,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 export function DynamicAccountForm({
   form,
   emailValidation,
+  expirationConfig,
   onFieldChange,
   onValidateEmail,
   onGenPassword,
@@ -192,6 +195,14 @@ export function DynamicAccountForm({
           Usa "Generar contraseña" para crear una contraseña segura de {form.passwordLength} caracteres.
         </div>
       )}
+
+      {/* ── Vigencia de la cuenta ────────────────────────────────────────── */}
+      <SectionLabel>Vigencia de la cuenta</SectionLabel>
+      <ExpirationSection
+        form={form}
+        config={expirationConfig}
+        onChange={onFieldChange}
+      />
 
     </div>
   );
