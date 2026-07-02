@@ -1,8 +1,10 @@
 using AccountGovernance.Application.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AccountGovernance.Api.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/dashboard")]
 [Produces("application/json")]

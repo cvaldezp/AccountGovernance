@@ -1,3 +1,4 @@
+import { authFetch } from '../../api/authFetch';
 import { computePreview } from './accountTypes';
 import type {
   AccountTypeInfo, AccountTypeKey, AccountSubTypeInfo, AccountSubTypeKey,
@@ -43,11 +44,9 @@ const MOCK_ACCOUNT_TYPES: AccountTypeInfo[] = [
   },
 ];
 
-// ── Debug fetch wrapper ────────────────────────────────────────────────────────
-// TODO: remove console.log once integration is confirmed working
+// ── Fetch wrapper with auth ───────────────────────────────────────────────────
 function apiFetch(url: string, options?: RequestInit): Promise<Response> {
-  console.log('[API]', options?.method ?? 'GET', url);
-  return fetch(url, options);
+  return authFetch(url, options);
 }
 
 // ── Type mappers ──────────────────────────────────────────────────────────────

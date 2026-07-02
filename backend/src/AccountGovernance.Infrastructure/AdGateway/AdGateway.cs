@@ -399,6 +399,43 @@ public sealed class AdGateway(
         }, ct);
     }
 
+    public Task<IReadOnlyList<string>> GetUserGroupDnsAsync(string upn, CancellationToken ct = default)
+    {
+        return Task.Run<IReadOnlyList<string>>(() =>
+        {
+            using var conn = CreateConnection();
+            conn.Bind();
+
+            var filter = $"(&(objectClass=user)(userPrincipalName={EscapeLdap(upn)}))";
+            var req    = new SearchRequest(
+                options.Value.BaseDn,
+                filter,
+                SearchScope.Subtree,
+                ["memberOf"])
+            {
+                SizeLimit = 1,
+                TimeLimit = TimeSpan.FromSeconds(options.Value.TimeoutSeconds),
+            };
+
+            var resp = (SearchResponse)conn.SendRequest(req);
+            if (resp.Entries.Count == 0)
+                return [];
+
+            var memberOf = resp.Entries[0].Attributes["memberOf"];
+            if (memberOf is null)
+                return [];
+
+            var groups = new List<string>(memberOf.Count);
+            for (var i = 0; i < memberOf.Count; i++)
+            {
+                var val = memberOf[i]?.ToString();
+                if (val is not null) groups.Add(val);
+            }
+
+            return groups;
+        }, ct);
+    }
+
     private static string? GetStringAttr(SearchResultEntry entry, string name)
     {
         var attr = entry.Attributes[name];

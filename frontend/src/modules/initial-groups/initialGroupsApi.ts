@@ -1,3 +1,4 @@
+import { authFetch } from '../../api/authFetch';
 import type { InitialGroup, CreateGroupForm, AdGroupValidation } from './types';
 
 function errorMessage(err: unknown): string {
@@ -5,7 +6,7 @@ function errorMessage(err: unknown): string {
 }
 
 async function apiFetch(url: string, options?: RequestInit): Promise<Response> {
-  const res = await fetch(url, options);
+  const res = await authFetch(url, options);
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     let msg = `HTTP ${res.status}`;

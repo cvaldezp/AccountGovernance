@@ -51,10 +51,11 @@ export interface AuditLog {
 }
 
 export interface AuthUser {
-  id: string;
-  name: string;
+  id:    string;
+  name:  string;
   email: string;
-  role: RoleName;
+  role:  RoleName;    // primary role — for backward compatibility with permission checks
+  roles: RoleName[];  // all system roles derived from on-premises AD group memberships
 }
 
 export interface AgentResult<T> {

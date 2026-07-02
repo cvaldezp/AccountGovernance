@@ -93,6 +93,8 @@ const MOCK_CONFIGS: AccountTypeConfigItem[] = [
   },
 ];
 
+import { authFetch } from '../../api/authFetch';
+
 let mockStore      = [...MOCK_CONFIGS];
 let mockSubStore   = [...MOCK_SUBTYPES];
 
@@ -105,7 +107,7 @@ function delay(ms = 300): Promise<void> {
 export const accountTypeConfigApi = {
   async getAll(): Promise<AccountTypeConfigItem[]> {
     try {
-      const res = await fetch('/api/account-type-configs');
+      const res = await authFetch('/api/account-type-configs');
       if (!res.ok) throw new Error();
       return res.json() as Promise<AccountTypeConfigItem[]>;
     } catch {
@@ -116,7 +118,7 @@ export const accountTypeConfigApi = {
 
   async update(typeKey: string, payload: UpdateConfigPayload): Promise<AccountTypeConfigItem> {
     try {
-      const res = await fetch(`/api/account-type-configs/${typeKey}`, {
+      const res = await authFetch(`/api/account-type-configs/${typeKey}`, {
         method:  'PUT',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(payload),
@@ -136,7 +138,7 @@ export const accountTypeConfigApi = {
 
   async updateSubType(typeKey: string, subTypeKey: string, payload: UpdateSubTypePayload): Promise<AccountSubTypeConfigItem> {
     try {
-      const res = await fetch(`/api/account-type-configs/${typeKey}/subtypes/${subTypeKey}`, {
+      const res = await authFetch(`/api/account-type-configs/${typeKey}/subtypes/${subTypeKey}`, {
         method:  'PUT',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify(payload),

@@ -105,4 +105,9 @@ public interface IAdGateway
 
     /// <summary>Adds the user (by DN) as a member of the group (by DN). Returns true on success.</summary>
     Task<bool> AddUserToGroupAsync(string userDn, string groupDn, CancellationToken ct = default);
+
+    // ── Authorization support ─────────────────────────────────────────────────────
+
+    /// <summary>Returns the DN of each group the specified user is a direct member of (via memberOf attribute).</summary>
+    Task<IReadOnlyList<string>> GetUserGroupDnsAsync(string upn, CancellationToken ct = default);
 }

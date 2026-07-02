@@ -2,6 +2,7 @@ using AccountGovernance.Application.Interfaces;
 using AccountGovernance.Infrastructure.AdGateway;
 using AccountGovernance.Infrastructure.Persistence;
 using AccountGovernance.Infrastructure.Persistence.Repositories;
+using AccountGovernance.Infrastructure.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -28,6 +29,7 @@ public static class DependencyInjection
         services.AddScoped<IAccountCreationAuditRepository,        AccountCreationAuditRepository>();
         services.AddScoped<IAccountTypeGroupRepository,  AccountTypeGroupRepository>();
         services.AddScoped<IExpirationConfigRepository,  ExpirationConfigRepository>();
+        services.AddScoped<ISystemAuthorizationService,  SystemAuthorizationService>();
 
         return services;
     }

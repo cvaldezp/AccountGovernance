@@ -1,12 +1,14 @@
 import { createContext } from 'react';
-import type { AuthUser, RoleName } from '../types';
+import type { AuthUser } from '../types';
 
 export interface AuthContextType {
-  user: AuthUser | null;
+  user:            AuthUser | null;
   isAuthenticated: boolean;
-  login: (role: RoleName) => void;
-  logout: () => void;
-  switchRole: (role: RoleName) => void;
+  isLoading:       boolean;
+  meError:         string | null;
+  login:           () => Promise<void>;
+  logout:          () => void;
+  getAccessToken:  () => Promise<string | null>;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);

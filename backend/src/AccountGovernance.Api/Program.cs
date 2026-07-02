@@ -1,7 +1,10 @@
 using System.Reflection;
 using AccountGovernance.Api.Middleware;
+using AccountGovernance.Api.Services;
 using AccountGovernance.Application;
+using AccountGovernance.Application.Interfaces;
 using AccountGovernance.Infrastructure;
+using Microsoft.Identity.Web;
 using Microsoft.OpenApi.Models;
 using Serilog;
 
@@ -19,7 +22,15 @@ try
         cfg.ReadFrom.Configuration(ctx.Configuration)
            .Enrich.FromLogContext());
 
+    // ── Authentication — Microsoft Entra ID (Azure AD) ────────────────────────
+    builder.Services
+        .AddAuthentication()
+        .AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("AzureAd"));
+
     // ── Services ──────────────────────────────────────────────────────────────
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+
     builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
 
@@ -31,7 +42,30 @@ try
             Version     = "v1",
             Description = "Active Directory governance portal — user lookup, permissions, and audit.",
         });
-        // Include XML comments for Swagger descriptions
+
+        // JWT Bearer support for Swagger UI
+        c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+        {
+            Type         = SecuritySchemeType.Http,
+            Scheme       = "bearer",
+            BearerFormat = "JWT",
+            Description  = "Pega un access_token de Entra ID. Obtenerlo con: az account get-access-token --resource api://<clientId>",
+        });
+        c.AddSecurityRequirement(new OpenApiSecurityRequirement
+        {
+            {
+                new OpenApiSecurityScheme
+                {
+                    Reference = new OpenApiReference
+                    {
+                        Type = ReferenceType.SecurityScheme,
+                        Id   = "Bearer",
+                    },
+                },
+                Array.Empty<string>()
+            }
+        });
+
         var xml = Path.Combine(AppContext.BaseDirectory,
             $"{Assembly.GetExecutingAssembly().GetName().Name}.xml");
         if (File.Exists(xml))
@@ -63,6 +97,7 @@ try
 
     app.UseSerilogRequestLogging();
     app.UseCors("Frontend");
+    app.UseAuthentication();
     app.UseAuthorization();
     app.MapControllers();
 
