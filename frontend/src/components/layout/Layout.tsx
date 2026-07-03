@@ -1,16 +1,10 @@
 import type { ReactNode } from 'react';
 import { Sidebar } from './Sidebar';
+import { UserProfilePopover } from './UserProfilePopover';
 import { useAuth } from '../../auth/useAuth';
-import { ROLES_CONFIG } from '../../config/roles.config';
 
 export function Layout({ children }: { children: ReactNode }) {
-  const { user, logout } = useAuth();
-  const roleConfig = ROLES_CONFIG.find(r => r.name === user?.role);
-  const initials   = user?.name
-    .split(' ')
-    .map(w => w[0])
-    .slice(0, 2)
-    .join('') ?? '?';
+  const { logout } = useAuth();
 
   return (
     <div className="app-layout">
@@ -32,18 +26,7 @@ export function Layout({ children }: { children: ReactNode }) {
             </span>
           </div>
           <div className="topbar-right">
-            <div className="topbar-user">
-              <div
-                className="topbar-avatar"
-                style={{ background: roleConfig?.color ?? '#3b82f6' }}
-              >
-                {initials}
-              </div>
-              <div className="topbar-user-info">
-                <span className="topbar-user-name">{user?.name}</span>
-                <span className="topbar-user-role">{user?.email}</span>
-              </div>
-            </div>
+            <UserProfilePopover />
             <button
               onClick={logout}
               title="Cerrar sesión"

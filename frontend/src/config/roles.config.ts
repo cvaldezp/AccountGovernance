@@ -2,6 +2,19 @@ import type { Role } from '../types';
 
 export const ROLES_CONFIG: Role[] = [
   {
+    name: 'SystemAdmin',
+    displayName: 'Super Usuario Administrador',
+    color: '#111827',
+    // canAccess() below always returns true for SystemAdmin regardless of this list —
+    // it's kept in sync for display purposes (Layout avatar color, etc.) only.
+    permissions: [
+      { field: 'Custom-External-Email-Address', actions: ['read', 'write'] },
+      { field: 'Oficina', actions: ['read', 'write'] },
+      { field: 'AccountStatus', actions: ['read', 'write'] },
+      { field: 'telephoneNumber', actions: ['read', 'write'] },
+    ],
+  },
+  {
     name: 'DragonHelp',
     displayName: 'Dragon Help Desk',
     color: '#8b5cf6',

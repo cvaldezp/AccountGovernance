@@ -1,4 +1,4 @@
-export type RoleName = 'DragonHelp' | 'Registro' | 'Seguridades' | 'RRHH';
+export type RoleName = 'DragonHelp' | 'Registro' | 'Seguridades' | 'RRHH' | 'SystemAdmin';
 
 export type FieldName =
   | 'Custom-External-Email-Address'
@@ -51,12 +51,22 @@ export interface AuditLog {
 }
 
 export interface AuthUser {
-  id:    string;
-  name:  string;
-  email: string;
-  role:  RoleName;    // primary role — for backward compatibility with permission checks
-  roles: RoleName[];  // all system roles derived from on-premises AD group memberships
+  id:               string;
+  name:             string;
+  email:            string;
+  role:             RoleName;    // primary role — for backward compatibility with permission checks
+  roles:            RoleName[];  // all system roles derived from on-premises AD group memberships
+  upn:              string;
+  objectId:         string | null;
+  primaryRole:      RoleName;    // same value as `role`, exposed under the name /api/auth/me uses
+  permissions:      string[];    // reserved for future action-level grants — always empty for now
+  isAuthorized:     boolean;
+  profileLoadedAt:  string;      // ISO timestamp — when this profile was fetched from /api/auth/me
 }
+
+// Three-state auth lifecycle — distinct from technical errors (network/API failures),
+// which are surfaced separately via AuthContextType.meError.
+export type AuthStatus = 'authenticating' | 'authorized' | 'unauthorized';
 
 export interface AgentResult<T> {
   success: boolean;
@@ -73,7 +83,8 @@ export type RouteKey =
   | 'attribute-catalog'
   | 'permissions-matrix'
   | 'account-type-config'
-  | 'initial-groups';
+  | 'initial-groups'
+  | 'system-roles-config';
 
 // ── Parametric field configuration ──────────────────────────────────────────
 

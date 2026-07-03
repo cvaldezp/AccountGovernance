@@ -1,4 +1,5 @@
 import { useRouter } from '../../routes/AppRoutes';
+import { useAuth } from '../../auth/useAuth';
 import type { RouteKey } from '../../types';
 
 interface NavItem {
@@ -21,6 +22,11 @@ const CONFIG_NAV: NavItem[] = [
   { key: 'initial-groups',       label: 'Grupos Iniciales',  icon: '⊕' },
 ];
 
+// Visible only to SystemAdmin — these tables control every other user's authorization.
+const SYSTEM_ADMIN_NAV: NavItem[] = [
+  { key: 'system-roles-config', label: 'Roles y Grupos', icon: '⚙' },
+];
+
 function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }) {
   return (
     <button
@@ -35,6 +41,8 @@ function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; 
 
 export function Sidebar() {
   const { currentRoute, navigate } = useRouter();
+  const { user } = useAuth();
+  const isSystemAdmin = user?.roles.includes('SystemAdmin') ?? false;
 
   const isActive = (key: RouteKey) =>
     currentRoute === key || (key === 'search' && currentRoute === 'user-detail');
@@ -70,6 +78,15 @@ export function Sidebar() {
         </div>
 
         {CONFIG_NAV.map(item => (
+          <NavButton
+            key={item.key}
+            item={item}
+            active={isActive(item.key)}
+            onClick={() => navigate(item.key)}
+          />
+        ))}
+
+        {isSystemAdmin && SYSTEM_ADMIN_NAV.map(item => (
           <NavButton
             key={item.key}
             item={item}

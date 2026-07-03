@@ -436,6 +436,11 @@ GO
 IF NOT EXISTS (SELECT 1 FROM gov.RoleFieldPermissions WHERE RoleName = 'DragonHelp')
 BEGIN
     INSERT INTO gov.RoleFieldPermissions (RoleName, FieldKey, CanView, CanEdit, IsActive) VALUES
+        -- SystemAdmin: acceso completo a todos los campos (super usuario)
+        ('SystemAdmin','field-ext-email',     1, 1, 1),
+        ('SystemAdmin','field-office',        1, 1, 1),
+        ('SystemAdmin','field-telephone',     1, 1, 1),
+        ('SystemAdmin','field-account-status',1, 1, 1),
         -- DragonHelp: ve y edita email/oficina; solo ve teléfono; sin acceso a estado
         ('DragonHelp', 'field-ext-email',     1, 1, 1),
         ('DragonHelp', 'field-office',        1, 1, 1),
@@ -499,4 +504,109 @@ IF NOT EXISTS (SELECT 1 FROM gov.ExpirationGlobalConfig)
         (AllowNoExpiration, AllowCustomDate, AllowedMonthsCsv)
     VALUES
         (1, 1, '1,2,3,6,9,12,18,24,36,48,60');
+GO
+
+-- ── 11. System roles — replaces Authorization:RoleMappings/RolePriority in appsettings ──
+-- SystemAuthorizationService resolves AD-group membership against these tables at runtime.
+-- Lower Priority = resolved first when a user matches more than one role (see ResolvePrimaryRole).
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.tables t
+    JOIN sys.schemas s ON t.schema_id = s.schema_id
+    WHERE t.name = 'SystemRoles' AND s.name = 'gov'
+)
+BEGIN
+    CREATE TABLE gov.SystemRoles (
+        Id          INT           NOT NULL IDENTITY(1,1) PRIMARY KEY,
+        RoleKey     NVARCHAR(100) NOT NULL,
+        DisplayName NVARCHAR(200) NOT NULL,
+        Description NVARCHAR(500) NULL,
+        Priority    INT           NOT NULL,
+        IsActive    BIT           NOT NULL DEFAULT 1,
+        CreatedAt   DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+        UpdatedAt   DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+        UpdatedBy   NVARCHAR(200) NULL,
+        CONSTRAINT UQ_Gov_SystemRoles_RoleKey UNIQUE (RoleKey)
+    );
+
+    CREATE INDEX IX_Gov_SystemRoles_Priority ON gov.SystemRoles (Priority);
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.tables t
+    JOIN sys.schemas s ON t.schema_id = s.schema_id
+    WHERE t.name = 'SystemRoleGroups' AND s.name = 'gov'
+)
+BEGIN
+    CREATE TABLE gov.SystemRoleGroups (
+        Id              INT           NOT NULL IDENTITY(1,1) PRIMARY KEY,
+        SystemRoleId    INT           NOT NULL,
+        GroupName       NVARCHAR(256) NOT NULL,
+        GroupDn         NVARCHAR(512) NOT NULL,
+        GroupSid        NVARCHAR(256) NULL,
+        GroupObjectGuid NVARCHAR(64)  NULL,
+        IsActive        BIT           NOT NULL DEFAULT 1,
+        CreatedAt       DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+        UpdatedAt       DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+        UpdatedBy       NVARCHAR(200) NULL,
+        CONSTRAINT FK_Gov_SystemRoleGroups_Role FOREIGN KEY (SystemRoleId)
+            REFERENCES gov.SystemRoles(Id),
+        CONSTRAINT UQ_Gov_SystemRoleGroups_RoleDn UNIQUE (SystemRoleId, GroupDn)
+    );
+
+    CREATE INDEX IX_Gov_SystemRoleGroups_RoleId ON gov.SystemRoleGroups (SystemRoleId);
+    CREATE INDEX IX_Gov_SystemRoleGroups_Active ON gov.SystemRoleGroups (IsActive);
+END
+GO
+
+-- Seed: initial roles (idempotent — insert only if RoleKey missing)
+IF NOT EXISTS (SELECT 1 FROM gov.SystemRoles WHERE RoleKey = 'SystemAdmin')
+    INSERT INTO gov.SystemRoles (RoleKey, DisplayName, Description, Priority, IsActive)
+    VALUES ('SystemAdmin', 'Super Usuario Administrador', 'Acceso total al sistema, incluida esta configuración de roles y grupos.', 1, 1);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM gov.SystemRoles WHERE RoleKey = 'Seguridades')
+    INSERT INTO gov.SystemRoles (RoleKey, DisplayName, Description, Priority, IsActive)
+    VALUES ('Seguridades', 'Seguridades', 'Acceso completo a todos los campos de cuentas.', 10, 1);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM gov.SystemRoles WHERE RoleKey = 'RRHH')
+    INSERT INTO gov.SystemRoles (RoleKey, DisplayName, Description, Priority, IsActive)
+    VALUES ('RRHH', 'Recursos Humanos', 'Gestión de estado, oficina y teléfono de cuentas.', 20, 1);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM gov.SystemRoles WHERE RoleKey = 'Registro')
+    INSERT INTO gov.SystemRoles (RoleKey, DisplayName, Description, Priority, IsActive)
+    VALUES ('Registro', 'Registro', 'Pendiente de asignar grupo AD.', 30, 1);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM gov.SystemRoles WHERE RoleKey = 'DragonHelp')
+    INSERT INTO gov.SystemRoles (RoleKey, DisplayName, Description, Priority, IsActive)
+    VALUES ('DragonHelp', 'Dragon Help Desk', 'Mesa de ayuda — edición de email y oficina.', 40, 1);
+GO
+
+-- Seed: initial AD group mappings (idempotent). Registro is intentionally left without a group.
+IF NOT EXISTS (SELECT 1 FROM gov.SystemRoleGroups WHERE GroupDn = 'CN=account-admin,OU=SECURITY,OU=GROUPS,OU=Cumbaya,DC=usfq,DC=edu,DC=ec')
+    INSERT INTO gov.SystemRoleGroups (SystemRoleId, GroupName, GroupDn, IsActive)
+    SELECT Id, 'account-admin', 'CN=account-admin,OU=SECURITY,OU=GROUPS,OU=Cumbaya,DC=usfq,DC=edu,DC=ec', 1
+    FROM gov.SystemRoles WHERE RoleKey = 'SystemAdmin';
+GO
+
+IF NOT EXISTS (SELECT 1 FROM gov.SystemRoleGroups WHERE GroupDn = 'CN=account-seg,OU=SECURITY,OU=GROUPS,OU=Cumbaya,DC=usfq,DC=edu,DC=ec')
+    INSERT INTO gov.SystemRoleGroups (SystemRoleId, GroupName, GroupDn, IsActive)
+    SELECT Id, 'account-seg', 'CN=account-seg,OU=SECURITY,OU=GROUPS,OU=Cumbaya,DC=usfq,DC=edu,DC=ec', 1
+    FROM gov.SystemRoles WHERE RoleKey = 'Seguridades';
+GO
+
+IF NOT EXISTS (SELECT 1 FROM gov.SystemRoleGroups WHERE GroupDn = 'CN=account-rrhh,OU=SECURITY,OU=GROUPS,OU=Cumbaya,DC=usfq,DC=edu,DC=ec')
+    INSERT INTO gov.SystemRoleGroups (SystemRoleId, GroupName, GroupDn, IsActive)
+    SELECT Id, 'account-rrhh', 'CN=account-rrhh,OU=SECURITY,OU=GROUPS,OU=Cumbaya,DC=usfq,DC=edu,DC=ec', 1
+    FROM gov.SystemRoles WHERE RoleKey = 'RRHH';
+GO
+
+IF NOT EXISTS (SELECT 1 FROM gov.SystemRoleGroups WHERE GroupDn = 'CN=account-sd,OU=SECURITY,OU=GROUPS,OU=Cumbaya,DC=usfq,DC=edu,DC=ec')
+    INSERT INTO gov.SystemRoleGroups (SystemRoleId, GroupName, GroupDn, IsActive)
+    SELECT Id, 'account-sd', 'CN=account-sd,OU=SECURITY,OU=GROUPS,OU=Cumbaya,DC=usfq,DC=edu,DC=ec', 1
+    FROM gov.SystemRoles WHERE RoleKey = 'DragonHelp';
 GO

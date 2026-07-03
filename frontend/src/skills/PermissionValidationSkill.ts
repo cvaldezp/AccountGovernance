@@ -1,9 +1,13 @@
 import { ROLES_CONFIG } from '../config/roles.config';
 import type { FieldConfig, FieldName, PermissionAction, RoleName } from '../types';
 
+const ALL_FIELDS: FieldName[] =
+  ['Custom-External-Email-Address', 'Oficina', 'AccountStatus', 'telephoneNumber'];
+
 // ── Legacy functions (roles.config.ts) — used by agents and PermissionAgent ─
 
 export function canAccess(role: RoleName, field: FieldName, action: PermissionAction): boolean {
+  if (role === 'SystemAdmin') return true; // SystemAdmin puede ver y editar todo.
   const roleConfig = ROLES_CONFIG.find(r => r.name === role);
   if (!roleConfig) return false;
   const fieldPerm = roleConfig.permissions.find(p => p.field === field);
@@ -12,6 +16,7 @@ export function canAccess(role: RoleName, field: FieldName, action: PermissionAc
 }
 
 export function getAllowedFields(role: RoleName): FieldName[] {
+  if (role === 'SystemAdmin') return ALL_FIELDS;
   const roleConfig = ROLES_CONFIG.find(r => r.name === role);
   if (!roleConfig) return [];
   return roleConfig.permissions.map(p => p.field);

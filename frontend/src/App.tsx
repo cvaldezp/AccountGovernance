@@ -12,6 +12,7 @@ import { PermissionsMatrixPage } from './modules/permissions/PermissionsMatrixPa
 import { CreateAccountPage } from './modules/account-creation/CreateAccountPage';
 import { AccountTypeConfigPage } from './modules/account-type-config/AccountTypeConfigPage';
 import { InitialGroupsPage } from './modules/initial-groups/InitialGroupsPage';
+import { SystemRolesConfigPage } from './modules/system-roles/SystemRolesConfigPage';
 
 function RouterView() {
   const { currentRoute } = useRouter();
@@ -26,12 +27,13 @@ function RouterView() {
     case 'permissions-matrix':  return <PermissionsMatrixPage />;
     case 'account-type-config': return <AccountTypeConfigPage />;
     case 'initial-groups':      return <InitialGroupsPage />;
+    case 'system-roles-config': return <SystemRolesConfigPage />;
     default:                 return <DashboardPage />;
   }
 }
 
 function AuthenticatedApp() {
-  const { isAuthenticated, isLoading, meError, logout } = useAuth();
+  const { status, isAuthenticated, isLoading, meError, logout } = useAuth();
 
   if (isLoading) {
     return (
@@ -76,6 +78,47 @@ function AuthenticatedApp() {
           No se pudo verificar los permisos
         </strong>
         <span style={{ color: 'var(--ds-neutral-500)', maxWidth: '420px' }}>{meError}</span>
+        <button
+          onClick={logout}
+          style={{
+            marginTop:    '8px',
+            padding:      '8px 20px',
+            border:       '1px solid var(--ds-neutral-300)',
+            borderRadius: '6px',
+            background:   'white',
+            cursor:       'pointer',
+            fontSize:     'var(--ds-text-sm)',
+          }}
+        >
+          Cerrar sesión
+        </button>
+      </div>
+    );
+  }
+
+  if (status === 'unauthorized') {
+    return (
+      <div style={{
+        display:        'flex',
+        flexDirection:  'column',
+        alignItems:     'center',
+        justifyContent: 'center',
+        gap:            '16px',
+        minHeight:      '100vh',
+        background:     'var(--ds-neutral-50)',
+        color:          'var(--ds-neutral-700)',
+        fontSize:       'var(--ds-text-sm)',
+        textAlign:      'center',
+        padding:        '32px',
+      }}>
+        <strong style={{ fontSize: 'var(--ds-text-base)', color: 'var(--ds-error-600)' }}>
+          Acceso denegado
+        </strong>
+        <span style={{ color: 'var(--ds-neutral-500)', maxWidth: '420px' }}>
+          No pertenece a ningún grupo autorizado para utilizar Account Governance.
+          <br />
+          Comuníquese con el administrador del sistema.
+        </span>
         <button
           onClick={logout}
           style={{

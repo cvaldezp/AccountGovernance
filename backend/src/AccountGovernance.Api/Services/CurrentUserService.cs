@@ -6,22 +6,34 @@ namespace AccountGovernance.Api.Services;
 public sealed class CurrentUserService(IHttpContextAccessor httpContextAccessor)
     : ICurrentUserService
 {
+    private const string XmlSoapUpnClaim   = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn";
+    private const string XmlSoapEmailClaim = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress";
+    private const string MsIdentityOidClaim = "http://schemas.microsoft.com/identity/claims/objectidentifier";
+
     private ClaimsPrincipal? Principal => httpContextAccessor.HttpContext?.User;
 
-    public string? UserPrincipalName =>
-        Principal?.FindFirstValue("upn")
-        ?? Principal?.FindFirstValue("preferred_username");
+    private string? FirstClaim(params string[] claimTypes)
+    {
+        if (Principal is null) return null;
+        foreach (var type in claimTypes)
+        {
+            var value = Principal.FindFirstValue(type);
+            if (!string.IsNullOrWhiteSpace(value))
+                return value;
+        }
+        return null;
+    }
 
-    public string? Email =>
-        Principal?.FindFirstValue("email")
-        ?? Principal?.FindFirstValue("preferred_username");
+    public string? UserPrincipalName => FirstClaim(
+        "preferred_username", "upn", "unique_name", "email",
+        XmlSoapUpnClaim, XmlSoapEmailClaim);
 
-    public string? DisplayName =>
-        Principal?.FindFirstValue("name");
+    public string? Email => FirstClaim(
+        "email", "preferred_username", XmlSoapEmailClaim);
 
-    public string? ObjectId =>
-        Principal?.FindFirstValue("oid")
-        ?? Principal?.FindFirstValue("http://schemas.microsoft.com/identity/claims/objectidentifier");
+    public string? DisplayName => FirstClaim("name");
+
+    public string? ObjectId => FirstClaim("oid", MsIdentityOidClaim);
 
     public IReadOnlyList<string> Roles =>
         Principal?.FindAll("roles").Select(c => c.Value).ToList()

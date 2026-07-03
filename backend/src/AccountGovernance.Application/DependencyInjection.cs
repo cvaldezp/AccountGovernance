@@ -16,6 +16,7 @@ public static class DependencyInjection
         services.AddScoped<IAccountTypeAdminService,         AccountTypeAdminService>();
         services.AddScoped<IAccountTypeGroupService,         AccountTypeGroupService>();
         services.AddScoped<IGroupAssignmentService,          GroupAssignmentService>();
+        services.AddScoped<ISystemRoleService,               SystemRoleService>();
         return services;
     }
 }

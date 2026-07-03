@@ -6,4 +6,5 @@ public enum RoleName
     Registro,
     Seguridades,
     RRHH,
+    SystemAdmin,
 }

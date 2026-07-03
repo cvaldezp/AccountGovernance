@@ -2,11 +2,15 @@ import type { IPublicClientApplication, AccountInfo } from '@azure/msal-browser'
 import { apiScopes } from './msalConfig';
 
 export interface MeDto {
-  upn:         string;
-  displayName: string | null;
-  email:       string | null;
-  objectId:    string | null;
-  roles:       string[];
+  upn:          string;
+  displayName:  string | null;
+  email:        string | null;
+  objectId:     string | null;
+  roles:        string[];
+  /** Highest-priority role, resolved server-side. The frontend must not re-derive this. */
+  primaryRole:  string | null;
+  permissions:  string[];
+  isAuthorized: boolean;
 }
 
 /**
