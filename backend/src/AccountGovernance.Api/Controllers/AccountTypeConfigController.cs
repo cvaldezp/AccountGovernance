@@ -7,7 +7,7 @@ namespace AccountGovernance.Api.Controllers;
 
 [Authorize]
 [ApiController]
-[Route("api/account-type-configs")]
+[Route("account-type-configs")]
 [Produces("application/json")]
 public sealed class AccountTypeConfigController(
     IAccountTypeAdminService svc,

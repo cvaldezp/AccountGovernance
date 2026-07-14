@@ -11,3 +11,7 @@ logs/
 **/secrets.json
 **/.env
 **/.env.*
+!.env.example
+!.env.development.example
+!.env.qa.example
+!.env.production.example

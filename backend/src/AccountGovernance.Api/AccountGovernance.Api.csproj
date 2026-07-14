@@ -8,6 +8,14 @@
     <UserSecretsId>account-governance-api-dev</UserSecretsId>
   </PropertyGroup>
 
+  <!-- IIS publish: environment stamped into the published web.config. Default matches
+       the checked-in web.config; override without editing any file via:
+         dotnet publish -c Release -p:EnvironmentName=QA
+         dotnet publish -c Release -p:EnvironmentName=Production -->
+  <PropertyGroup>
+    <EnvironmentName Condition="'$(EnvironmentName)' == ''">Development</EnvironmentName>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\AccountGovernance.Infrastructure\AccountGovernance.Infrastructure.csproj" />
   </ItemGroup>
@@ -20,4 +28,23 @@
     <PackageReference Include="Serilog.Enrichers.Thread" Version="3.1.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
   </ItemGroup>
+
+  <!-- Microsoft.NET.Sdk.Web already globs web.config as a default Content item — Update
+       (not Include) sets its publish behavior explicitly without creating a duplicate. -->
+  <ItemGroup>
+    <Content Update="web.config">
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!-- Stamps $(EnvironmentName) into the PUBLISHED web.config's ASPNETCORE_ENVIRONMENT
+       value. Only touches the output copy — the checked-in web.config in source control
+       is never modified, so Development stays its default for a plain `dotnet publish`. -->
+  <Target Name="SetWebConfigEnvironment" AfterTargets="Publish" Condition="Exists('$(PublishDir)web.config')">
+    <PropertyGroup>
+      <_WebConfigContent>$([System.IO.File]::ReadAllText('$(PublishDir)web.config'))</_WebConfigContent>
+      <_WebConfigContent>$(_WebConfigContent.Replace('ASPNETCORE_ENVIRONMENT" value="Development"', 'ASPNETCORE_ENVIRONMENT" value="$(EnvironmentName)"'))</_WebConfigContent>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(PublishDir)web.config" Lines="$(_WebConfigContent)" Overwrite="true" />
+  </Target>
 </Project>

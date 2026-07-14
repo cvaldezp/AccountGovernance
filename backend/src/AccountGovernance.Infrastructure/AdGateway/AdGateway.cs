@@ -47,7 +47,20 @@ public sealed class AdGateway(
         var cap    = Math.Min(maxResults, options.Value.MaxSearchResults);
 
         logger.LogDebug("AD search — filter: {Filter}", filter);
-        return await RunSearchAsync(q, filter, cap, SearchFetchAttributes, ct);
+
+        // TEMP LOG — remove once the user search regression is diagnosed.
+        logger.LogInformation(
+            "[DIAG-SEARCH] SearchUsersAsync — query='{Query}', filter={Filter}, baseDn={BaseDn}",
+            q, filter, options.Value.BaseDn);
+
+        var result = await RunSearchAsync(q, filter, cap, SearchFetchAttributes, ct);
+
+        // TEMP LOG — remove once the user search regression is diagnosed.
+        logger.LogInformation(
+            "[DIAG-SEARCH] SearchUsersAsync — resultados AD: {Count}, tooManyResults={TooMany}",
+            result.Users.Count, result.TooManyResults);
+
+        return result;
     }
 
     public async Task<User?> GetUserByAccountAsync(
@@ -366,7 +379,16 @@ public sealed class AdGateway(
         return new AdGroupInfo(name, dn, objectGuid, sid, isSecurity);
     }
 
-    public Task<bool> AddUserToGroupAsync(string userDn, string groupDn, CancellationToken ct = default)
+    public Task<bool> AddUserToGroupAsync(string userDn, string groupDn, CancellationToken ct = default) =>
+        ModifyGroupMemberAsync(groupDn, userDn, DirectoryAttributeOperation.Add, ct);
+
+    /// <summary>
+    /// Adds or removes a single DN from a group's `member` attribute. Shared by regular
+    /// (security) group membership and distribution list membership — AD treats both the
+    /// same way at the LDAP level (a group object with a multivalued `member` attribute).
+    /// </summary>
+    private Task<bool> ModifyGroupMemberAsync(
+        string groupDn, string memberDn, DirectoryAttributeOperation operation, CancellationToken ct)
     {
         return Task.Run(() =>
         {
@@ -376,9 +398,9 @@ public sealed class AdGateway(
             var mod = new DirectoryAttributeModification
             {
                 Name      = "member",
-                Operation = DirectoryAttributeOperation.Add,
+                Operation = operation,
             };
-            mod.Add(userDn);
+            mod.Add(memberDn);
 
             var req = new ModifyRequest(groupDn);
             req.Modifications.Add(mod);
@@ -387,17 +409,195 @@ public sealed class AdGateway(
             {
                 conn.SendRequest(req);
                 logger.LogInformation(
-                    "Group membership added — User: {UserDn}, Group: {GroupDn}", userDn, groupDn);
+                    "Group membership {Operation} — Member: {MemberDn}, Group: {GroupDn}",
+                    operation, memberDn, groupDn);
                 return true;
             }
             catch (DirectoryOperationException ex)
             {
                 logger.LogError(ex,
-                    "Failed to add user {UserDn} to group {GroupDn}", userDn, groupDn);
+                    "Failed to {Operation} member {MemberDn} on group {GroupDn}",
+                    operation, memberDn, groupDn);
                 return false;
             }
         }, ct);
     }
+
+    // ── Distribution lists ──────────────────────────────────────────────────────
+
+    private static readonly string[] DistributionListFetchAttributes =
+        ["cn", "distinguishedName", "mail", "description", "managedBy", "member", "groupType"];
+
+    private static readonly string[] DistributionMemberFetchAttributes =
+        ["sAMAccountName", "displayName", "mail", "userPrincipalName", "distinguishedName"];
+
+    // groupType bit 0x80000000 (2147483648) = ADS_GROUP_TYPE_SECURITY_ENABLED.
+    // Negating a bit-AND match on that bit isolates pure distribution groups.
+    private const string DistributionOnlyFilter = "(!(groupType:1.2.840.113556.1.4.803:=2147483648))";
+
+    public Task<IReadOnlyList<AdDistributionListInfo>> SearchDistributionListsAsync(
+        string query, int maxResults = 20, CancellationToken ct = default)
+    {
+        return Task.Run<IReadOnlyList<AdDistributionListInfo>>(() =>
+        {
+            using var conn = CreateConnection();
+            conn.Bind();
+
+            var escaped = EscapeLdap(query.Trim());
+            var filter  = $"(&(objectClass=group){DistributionOnlyFilter}(|(cn=*{escaped}*)(mail=*{escaped}*)))";
+            var cap     = Math.Min(maxResults, options.Value.MaxSearchResults);
+
+            var req = new SearchRequest(
+                options.Value.BaseDn, filter, SearchScope.Subtree, DistributionListFetchAttributes)
+            {
+                SizeLimit = cap,
+                TimeLimit = TimeSpan.FromSeconds(options.Value.TimeoutSeconds),
+            };
+
+            SearchResponse resp;
+            try
+            {
+                resp = (SearchResponse)conn.SendRequest(req);
+            }
+            catch (DirectoryOperationException ex)
+                when (ex.Response is SearchResponse sr && sr.ResultCode == ResultCode.SizeLimitExceeded)
+            {
+                logger.LogWarning("Distribution list search size limit exceeded for query '{Query}'", query);
+                resp = sr;
+            }
+
+            var lists = new List<AdDistributionListInfo>(resp.Entries.Count);
+            foreach (SearchResultEntry entry in resp.Entries)
+                lists.Add(MapDistributionListEntry(conn, entry));
+
+            return lists;
+        }, ct);
+    }
+
+    public Task<AdDistributionListInfo?> GetDistributionListAsync(string dn, CancellationToken ct = default)
+    {
+        return Task.Run<AdDistributionListInfo?>(() =>
+        {
+            using var conn = CreateConnection();
+            conn.Bind();
+
+            var req = new SearchRequest(
+                dn, "(objectClass=group)", SearchScope.Base, DistributionListFetchAttributes)
+            {
+                SizeLimit = 1,
+                TimeLimit = TimeSpan.FromSeconds(options.Value.TimeoutSeconds),
+            };
+
+            SearchResponse resp;
+            try
+            {
+                resp = (SearchResponse)conn.SendRequest(req);
+            }
+            catch (DirectoryOperationException ex)
+                when (ex.Response?.ResultCode is ResultCode.NoSuchObject or ResultCode.InvalidDNSyntax)
+            {
+                return null;
+            }
+
+            return resp.Entries.Count == 0 ? null : MapDistributionListEntry(conn, resp.Entries[0]);
+        }, ct);
+    }
+
+    /// <summary>
+    /// Maps a group entry plus its resolved `managedBy` display name. Runs a second Base-scope
+    /// search on the same connection when a manager DN is present — cheap and avoids a full
+    /// second gateway round-trip.
+    /// </summary>
+    private AdDistributionListInfo MapDistributionListEntry(LdapConnection conn, SearchResultEntry entry)
+    {
+        var name      = GetStringAttr(entry, "cn") ?? string.Empty;
+        var dn        = entry.DistinguishedName ?? GetStringAttr(entry, "distinguishedName") ?? string.Empty;
+        var mail      = GetStringAttr(entry, "mail");
+        var desc      = GetStringAttr(entry, "description");
+        var managerDn = GetStringAttr(entry, "managedBy");
+
+        var memberCount = entry.Attributes["member"]?.Count ?? 0;
+
+        string? managerDisplayName = null;
+        if (!string.IsNullOrEmpty(managerDn))
+        {
+            try
+            {
+                var mreq = new SearchRequest(
+                    managerDn, "(objectClass=*)", SearchScope.Base, ["displayName"])
+                {
+                    SizeLimit = 1,
+                    TimeLimit = TimeSpan.FromSeconds(options.Value.TimeoutSeconds),
+                };
+                var mresp = (SearchResponse)conn.SendRequest(mreq);
+                if (mresp.Entries.Count > 0)
+                    managerDisplayName = GetStringAttr(mresp.Entries[0], "displayName");
+            }
+            catch (DirectoryOperationException)
+            {
+                // Manager DN could not be resolved (deleted/moved) — fall back to the raw DN.
+            }
+        }
+
+        return new AdDistributionListInfo(name, dn, mail, desc, managerDn, managerDisplayName, memberCount);
+    }
+
+    public Task<IReadOnlyList<AdDistributionListMemberInfo>> GetDistributionListMembersAsync(
+        string dn, CancellationToken ct = default)
+    {
+        return Task.Run<IReadOnlyList<AdDistributionListMemberInfo>>(() =>
+        {
+            using var conn = CreateConnection();
+            conn.Bind();
+
+            // Reverse lookup via memberOf — one query instead of resolving each `member` DN.
+            var filter = $"(&(objectClass=user)(objectCategory=person)(memberOf={EscapeLdap(dn)}))";
+            var req = new SearchRequest(
+                options.Value.BaseDn, filter, SearchScope.Subtree, DistributionMemberFetchAttributes)
+            {
+                SizeLimit = options.Value.MaxSearchResults,
+                TimeLimit = TimeSpan.FromSeconds(options.Value.TimeoutSeconds),
+            };
+
+            SearchResponse resp;
+            try
+            {
+                resp = (SearchResponse)conn.SendRequest(req);
+            }
+            catch (DirectoryOperationException ex)
+                when (ex.Response is SearchResponse sr && sr.ResultCode == ResultCode.SizeLimitExceeded)
+            {
+                logger.LogWarning("Distribution list member search size limit exceeded for DN '{Dn}'", dn);
+                resp = sr;
+            }
+
+            var members = new List<AdDistributionListMemberInfo>(resp.Entries.Count);
+            foreach (SearchResultEntry entry in resp.Entries)
+            {
+                try
+                {
+                    var user = AdUserMapper.Map(entry);
+                    members.Add(new AdDistributionListMemberInfo(
+                        user.DisplayName, user.Email, user.SamAccountName,
+                        user.DistinguishedName ?? string.Empty));
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Skipping malformed distribution list member entry for list {Dn}", dn);
+                }
+            }
+
+            return members;
+        }, ct);
+    }
+
+    public Task<bool> AddMemberToDistributionListAsync(
+        string listDn, string memberDn, CancellationToken ct = default) =>
+        ModifyGroupMemberAsync(listDn, memberDn, DirectoryAttributeOperation.Add, ct);
+
+    public Task<bool> RemoveMemberFromDistributionListAsync(
+        string listDn, string memberDn, CancellationToken ct = default) =>
+        ModifyGroupMemberAsync(listDn, memberDn, DirectoryAttributeOperation.Delete, ct);
 
     public Task<IReadOnlyList<string>> GetUserGroupDnsAsync(string upn, CancellationToken ct = default)
     {
@@ -529,6 +729,12 @@ public sealed class AdGateway(
                     rawQuery, sizeLimit);
                 return new AdSearchResult([], TooManyResults: true);
             }
+
+            // TEMP LOG — remove once the user search regression is diagnosed.
+            logger.LogInformation(
+                "[DIAG-SEARCH] RunSearchAsync — query='{Query}', entradas devueltas por LDAP: {Count}, primer DN: {Dn}",
+                rawQuery, response.Entries.Count,
+                response.Entries.Count > 0 ? response.Entries[0].DistinguishedName : "(ninguno)");
 
             var users = new List<User>(response.Entries.Count);
             foreach (SearchResultEntry entry in response.Entries)

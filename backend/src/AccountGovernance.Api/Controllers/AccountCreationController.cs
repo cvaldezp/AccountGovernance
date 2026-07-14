@@ -7,7 +7,7 @@ namespace AccountGovernance.Api.Controllers;
 
 [Authorize]
 [ApiController]
-[Route("api")]
+[Route("")]
 [Produces("application/json")]
 public sealed class AccountCreationController(
     IAccountCreationService            svc,

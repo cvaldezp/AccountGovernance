@@ -7,7 +7,7 @@ namespace AccountGovernance.Api.Controllers;
 
 [Authorize]
 [ApiController]
-[Route("api/auth")]
+[Route("auth")]
 [Produces("application/json")]
 public sealed class AuthController(
     ICurrentUserService         currentUser,
@@ -44,9 +44,11 @@ public sealed class AuthController(
             currentUser.UserPrincipalName, string.Join(", ", roles));
         logger.LogInformation("[AUTH] Rol primario resuelto para {Upn}: {PrimaryRole}",
             currentUser.UserPrincipalName, primaryRole);
-        logger.LogInformation(
-            isAuthorized ? "[AUTH] Usuario autorizado: {Upn}" : "[AUTH] Usuario sin autorización: {Upn}",
-            currentUser.UserPrincipalName);
+
+        if (isAuthorized)
+            logger.LogInformation("[AUTH] Usuario autorizado: {Upn}", currentUser.UserPrincipalName);
+        else
+            logger.LogInformation("[AUTH] Usuario sin autorización: {Upn}", currentUser.UserPrincipalName);
 
         return Ok(new MeResponseDto(
             Upn:          currentUser.UserPrincipalName ?? string.Empty,

@@ -1,5 +1,4 @@
-import type { IPublicClientApplication, AccountInfo } from '@azure/msal-browser';
-import { apiScopes } from './msalConfig';
+import { authFetch } from '../api/authFetch';
 
 export interface MeDto {
   upn:          string;
@@ -14,18 +13,12 @@ export interface MeDto {
 }
 
 /**
- * Calls GET /api/auth/me with the current MSAL access token.
+ * Calls GET /api/auth/me with the current MSAL access token (attached by authFetch).
  * Returns null on any failure (network error, 401, etc.).
  */
-export async function fetchMe(
-  instance: IPublicClientApplication,
-  account:  AccountInfo,
-): Promise<MeDto | null> {
+export async function fetchMe(): Promise<MeDto | null> {
   try {
-    const tokenResult = await instance.acquireTokenSilent({ scopes: apiScopes, account });
-    const res = await fetch('/api/auth/me', {
-      headers: { Authorization: `Bearer ${tokenResult.accessToken}` },
-    });
+    const res = await authFetch('/api/auth/me');
     if (!res.ok) return null;
     return res.json() as Promise<MeDto>;
   } catch {

@@ -2,9 +2,17 @@ import type { User, RoleName, AgentResult, FieldName, UserAttributes } from '../
 import { getUserById, getVisibleAttributes } from '../skills/GetUserAttributesSkill';
 import { updateAttribute } from '../skills/UpdateAttributeSkill';
 import { addAuditEntry } from '../api/auditApi';
+import { authFetch } from '../api/authFetch';
 
-const API_BASE = (import.meta as { env?: Record<string, string | undefined> }).env?.['VITE_API_URL']
-  ?? 'http://localhost:5000';
+const env = (import.meta as { env?: Record<string, string | undefined> }).env ?? {};
+
+// Relative to the current origin — resolved through the same reverse proxy (IIS/HAProxy)
+// or Vite dev proxy that serves the SPA, so no host/port config is needed per environment.
+const USERS_URL = '/api/users';
+
+// Mock data must never be a silent fallback for a broken/unreachable API — it only
+// activates when explicitly opted into via this flag (e.g. local dev without AD access).
+const MOCK_MODE = env['VITE_USE_MOCK_DATA'] === 'true';
 
 // Shape of the real API response (GET /api/users/{samAccountName})
 interface ApiUserDetailDto {
@@ -52,10 +60,9 @@ function mapApiDetailToUser(dto: ApiUserDetailDto): User {
 
 export class UserProfileAgent {
   async getProfile(samAccountName: string, role: RoleName): Promise<AgentResult<User>> {
-    // ── Try real API first using samAccountName as canonical identifier ────────
     try {
-      const res = await fetch(
-        `${API_BASE}/api/users/${encodeURIComponent(samAccountName)}`,
+      const res = await authFetch(
+        `${USERS_URL}/${encodeURIComponent(samAccountName)}`,
         { signal: AbortSignal.timeout(5000) },
       );
 
@@ -70,16 +77,35 @@ export class UserProfileAgent {
           error: `Usuario '${samAccountName}' no encontrado en Active Directory.`,
         };
       }
+
+      if (res.status === 401 || res.status === 403) {
+        return {
+          success: false,
+          error: 'No tienes autorización para consultar este usuario. Verifica tu sesión e intenta de nuevo.',
+        };
+      }
+
+      // Any other non-2xx response means the API was reached and answered — surface
+      // the real error to the user instead of silently falling back to mock data.
+      return {
+        success: false,
+        error: `Error del servidor al consultar el usuario (HTTP ${res.status}).`,
+      };
     } catch {
-      // Network error or timeout — fall through to mock
+      // The API itself was unreachable (network error, timeout, CORS) — mock data
+      // is only used here, and only when explicitly enabled via VITE_USE_MOCK_DATA.
+      if (MOCK_MODE) {
+        const user = await getUserById(samAccountName);
+        if (!user) return { success: false, error: 'Usuario no encontrado.' };
+
+        const visibleAttrs = getVisibleAttributes(user, role);
+        return { success: true, data: { ...user, attributes: visibleAttrs as User['attributes'] } };
+      }
+      return {
+        success: false,
+        error: 'No se pudo conectar con el servidor. Verifica tu conexión o intenta de nuevo más tarde.',
+      };
     }
-
-    // ── Fallback: mock data (samAccountName may not match mock IDs) ────────────
-    const user = await getUserById(samAccountName);
-    if (!user) return { success: false, error: 'Usuario no encontrado.' };
-
-    const visibleAttrs = getVisibleAttributes(user, role);
-    return { success: true, data: { ...user, attributes: visibleAttrs as User['attributes'] } };
   }
 
   async updateField(

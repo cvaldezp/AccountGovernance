@@ -7,7 +7,7 @@ namespace AccountGovernance.Api.Controllers;
 
 [Authorize]
 [ApiController]
-[Route("api/permissions")]
+[Route("permissions")]
 [Produces("application/json")]
 public sealed class PermissionsController(IPermissionService permissionService) : ControllerBase
 {

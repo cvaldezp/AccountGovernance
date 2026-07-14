@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:development": "node scripts/check-env.mjs development && tsc -b && vite build --mode development",
+    "build:qa": "node scripts/check-env.mjs qa && tsc -b && vite build --mode qa",
+    "build:production": "node scripts/check-env.mjs production && tsc -b && vite build --mode production",
     "lint": "eslint .",
     "preview": "vite preview"
   },

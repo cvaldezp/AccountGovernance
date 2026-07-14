@@ -26,6 +26,25 @@ public sealed record AdGroupSearchResult(
     int?         MatchCount   // approximate count when Ambiguous=true
 );
 
+/// <summary>Distribution group info — Manager fields are resolved from the raw `managedBy` DN.</summary>
+public sealed record AdDistributionListInfo(
+    string  Name,
+    string  Dn,
+    string? Mail,
+    string? Description,
+    string? ManagerDn,
+    string? ManagerDisplayName,
+    int     MemberCount
+);
+
+/// <summary>A single member of a distribution list, resolved from AD user attributes.</summary>
+public sealed record AdDistributionListMemberInfo(
+    string  DisplayName,
+    string? Mail,
+    string  SamAccountName,
+    string  Dn
+);
+
 /// <summary>Full set of attributes needed to create an AD user account.</summary>
 public sealed record AdCreateUserRequest(
     string  UserDn,
@@ -105,6 +124,29 @@ public interface IAdGateway
 
     /// <summary>Adds the user (by DN) as a member of the group (by DN). Returns true on success.</summary>
     Task<bool> AddUserToGroupAsync(string userDn, string groupDn, CancellationToken ct = default);
+
+    // ── Distribution lists ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Searches distribution groups (objectClass=group, security-disabled) by name or mail.
+    /// </summary>
+    Task<IReadOnlyList<AdDistributionListInfo>> SearchDistributionListsAsync(
+        string query, int maxResults = 20, CancellationToken ct = default);
+
+    /// <summary>Returns full detail (mail, description, manager, member count) for a distribution list by DN.</summary>
+    Task<AdDistributionListInfo?> GetDistributionListAsync(string dn, CancellationToken ct = default);
+
+    /// <summary>Returns every user member of the distribution list, resolved via a reverse memberOf search.</summary>
+    Task<IReadOnlyList<AdDistributionListMemberInfo>> GetDistributionListMembersAsync(
+        string dn, CancellationToken ct = default);
+
+    /// <summary>Adds the user (by DN) as a member of the distribution list (by DN).</summary>
+    Task<bool> AddMemberToDistributionListAsync(
+        string listDn, string memberDn, CancellationToken ct = default);
+
+    /// <summary>Removes the user (by DN) from the distribution list (by DN).</summary>
+    Task<bool> RemoveMemberFromDistributionListAsync(
+        string listDn, string memberDn, CancellationToken ct = default);
 
     // ── Authorization support ─────────────────────────────────────────────────────
 

@@ -6,7 +6,7 @@ namespace AccountGovernance.Api.Controllers;
 
 [Authorize]
 [ApiController]
-[Route("api/dashboard")]
+[Route("dashboard")]
 [Produces("application/json")]
 public sealed class DashboardController(IDashboardService dashboardService) : ControllerBase
 {

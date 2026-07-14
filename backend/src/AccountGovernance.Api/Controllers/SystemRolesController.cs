@@ -14,7 +14,7 @@ namespace AccountGovernance.Api.Controllers;
 /// </summary>
 [Authorize]
 [ApiController]
-[Route("api/system-roles")]
+[Route("system-roles")]
 [Produces("application/json")]
 public sealed class SystemRolesController(
     ISystemRoleService           svc,

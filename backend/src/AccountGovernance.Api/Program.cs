@@ -1,9 +1,13 @@
 using System.Reflection;
+using System.Text.Json;
 using AccountGovernance.Api.Middleware;
 using AccountGovernance.Api.Services;
 using AccountGovernance.Application;
 using AccountGovernance.Application.Interfaces;
 using AccountGovernance.Infrastructure;
+using AccountGovernance.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Data.SqlClient;
 using Microsoft.Identity.Web;
 using Microsoft.OpenApi.Models;
 using Serilog;
@@ -33,6 +37,10 @@ try
 
     builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
+
+    // Liveness only — no registered checks, so it never touches AD or the database.
+    // Readiness (AD/DB connectivity) is a separate concern, not implemented here.
+    builder.Services.AddHealthChecks();
 
     builder.Services.AddSwaggerGen(c =>
     {
@@ -91,8 +99,11 @@ try
     if (app.Environment.IsDevelopment())
     {
         app.UseSwagger();
+        // Relative path (no leading slash) — resolves against the current PathBase in the
+        // browser (e.g. /api/swagger/v1/swagger.json when hosted as an IIS child app at
+        // /api). An absolute path would ignore PathBase and 404 under IIS.
         app.UseSwaggerUI(c =>
-            c.SwaggerEndpoint("/swagger/v1/swagger.json", "AccountGovernance API v1"));
+            c.SwaggerEndpoint("v1/swagger.json", "AccountGovernance API v1"));
     }
 
     app.UseSerilogRequestLogging();
@@ -100,6 +111,31 @@ try
     app.UseAuthentication();
     app.UseAuthorization();
     app.MapControllers();
+
+    // Liveness endpoint for HAProxy — anonymous, no AD/DB access.
+    app.MapHealthChecks("/health", new HealthCheckOptions
+    {
+        ResponseWriter = async (context, report) =>
+        {
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync(
+                JsonSerializer.Serialize(new { status = report.Status.ToString() }));
+        },
+    }).AllowAnonymous();
+
+    // TEMP LOG — remove once the SQL Server/DB target for this IIS deployment is confirmed.
+    // Runs once at startup, never per-request. Reads the exact connection string
+    // IDbConnectionFactory would use (the connection is never opened), and logs only
+    // non-secret pieces via SqlConnectionStringBuilder — never the password, the raw
+    // connection string, or any token/secret.
+    using (var conn = app.Services.GetRequiredService<IDbConnectionFactory>().Create())
+    {
+        var csb = new SqlConnectionStringBuilder(conn.ConnectionString);
+        Log.Information("[DB-CONFIG] Environment={Env}",     app.Environment.EnvironmentName);
+        Log.Information("[DB-CONFIG] Server={Server}",       csb.DataSource);
+        Log.Information("[DB-CONFIG] Database={Database}",   csb.InitialCatalog);
+        Log.Information("[DB-CONFIG] ContentRoot={Content}",  app.Environment.ContentRootPath);
+    }
 
     Log.Information("Starting AccountGovernance API on {Env}", app.Environment.EnvironmentName);
     app.Run();

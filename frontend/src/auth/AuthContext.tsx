@@ -10,7 +10,6 @@ export interface AuthContextType {
   meError:         string | null;
   login:           () => Promise<void>;
   logout:          () => void;
-  getAccessToken:  () => Promise<string | null>;
 }
 
 export const AuthContext = createContext<AuthContextType | null>(null);

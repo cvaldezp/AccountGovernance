@@ -7,7 +7,7 @@ namespace AccountGovernance.Api.Controllers;
 
 [Authorize]
 [ApiController]
-[Route("api/ad")]
+[Route("ad")]
 [Produces("application/json")]
 public sealed class AdController(IAccountTypeGroupService groupSvc) : ControllerBase
 {

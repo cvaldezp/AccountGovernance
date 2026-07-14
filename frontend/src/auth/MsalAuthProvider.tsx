@@ -50,7 +50,7 @@ function AuthBridge({ children }: { children: ReactNode }) {
 
     console.log('[MSAL] fetchMe start, account =', account.username);
     console.log('[AUTH] Usuario autenticado:', account.username);
-    fetchMe(instance, account).then(result => {
+    fetchMe().then(result => {
       if (cancelled) return;
       if (!result) {
         // Technical failure (network/API/timeout) — distinct from "authenticated but no roles".
@@ -115,22 +115,9 @@ function AuthBridge({ children }: { children: ReactNode }) {
     void instance.logoutRedirect({ account: account ?? undefined });
   }
 
-  async function getAccessToken(): Promise<string | null> {
-    if (!account) return null;
-    try {
-      const result = await instance.acquireTokenSilent({ scopes: apiScopes, account });
-      return result.accessToken;
-    } catch {
-      // Consistent with the redirect-based login flow — this navigates away
-      // and the token becomes available after handleRedirectPromise resolves.
-      await instance.acquireTokenRedirect({ scopes: apiScopes });
-      return null;
-    }
-  }
-
   return (
     <AuthContext.Provider
-      value={{ status, user, isAuthenticated, isLoading, meError, login, logout, getAccessToken }}
+      value={{ status, user, isAuthenticated, isLoading, meError, login, logout }}
     >
       {children}
     </AuthContext.Provider>

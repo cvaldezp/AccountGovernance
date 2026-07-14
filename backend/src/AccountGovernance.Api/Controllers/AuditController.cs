@@ -7,7 +7,7 @@ namespace AccountGovernance.Api.Controllers;
 
 [Authorize]
 [ApiController]
-[Route("api/audit")]
+[Route("audit")]
 [Produces("application/json")]
 public sealed class AuditController(IAuditService auditService) : ControllerBase
 {

@@ -7,8 +7,9 @@ const apiScope  = import.meta.env.VITE_AZURE_API_SCOPE  as string;
 export const msalConfig: Configuration = {
   auth: {
     clientId,
-    authority:   `https://login.microsoftonline.com/${tenantId}`,
-    redirectUri: window.location.origin,
+    authority:              `https://login.microsoftonline.com/${tenantId}`,
+    redirectUri:            window.location.origin,
+    postLogoutRedirectUri:  window.location.origin,
   },
   cache: {
     cacheLocation: 'sessionStorage',

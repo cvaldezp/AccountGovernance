@@ -84,7 +84,8 @@ export type RouteKey =
   | 'permissions-matrix'
   | 'account-type-config'
   | 'initial-groups'
-  | 'system-roles-config';
+  | 'system-roles-config'
+  | 'distribution-lists';
 
 // ── Parametric field configuration ──────────────────────────────────────────
 

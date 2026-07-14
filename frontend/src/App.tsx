@@ -13,6 +13,7 @@ import { CreateAccountPage } from './modules/account-creation/CreateAccountPage'
 import { AccountTypeConfigPage } from './modules/account-type-config/AccountTypeConfigPage';
 import { InitialGroupsPage } from './modules/initial-groups/InitialGroupsPage';
 import { SystemRolesConfigPage } from './modules/system-roles/SystemRolesConfigPage';
+import { DistributionListsPage } from './modules/distribution-lists/DistributionListsPage';
 
 function RouterView() {
   const { currentRoute } = useRouter();
@@ -28,6 +29,7 @@ function RouterView() {
     case 'account-type-config': return <AccountTypeConfigPage />;
     case 'initial-groups':      return <InitialGroupsPage />;
     case 'system-roles-config': return <SystemRolesConfigPage />;
+    case 'distribution-lists':  return <DistributionListsPage />;
     default:                 return <DashboardPage />;
   }
 }
