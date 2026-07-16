@@ -14,22 +14,38 @@ interface AgentResult<T> { success: boolean; data?: T; error?: string; }
 | Archivo | Responsabilidad |
 |---------|----------------|
 | `SearchUserSkill.ts` | Filtra `MOCK_USERS` por query (fallback sin API) |
-| `GetUserAttributesSkill.ts` | Obtiene atributos de un usuario |
-| `UpdateAttributeSkill.ts` | Actualiza un atributo AD (stub) |
-| `EnableAccountSkill.ts` | Habilita cuenta AD (stub) |
-| `DisableAccountSkill.ts` | Deshabilita cuenta AD (stub) |
-| `PermissionValidationSkill.ts` | Valida si el rol tiene permiso sobre un campo |
+| `GetUserAttributesSkill.ts` | Obtiene atributos de un usuario (mock) |
+| `UpdateAttributeSkill.ts` | Actualiza un atributo sobre `MOCK_USERS` — activo solo bajo `VITE_USE_MOCK_DATA=true`; el flujo real pasa por `usersApi.updateUserAttribute()` (`PATCH /api/users/{sam}/attributes/{attr}`), no por este skill |
+| `EnableAccountSkill.ts` | Habilita cuenta sobre `MOCK_USERS` — mismo alcance que `UpdateAttributeSkill`; el flujo real usa `usersApi.updateAccountStatus()` |
+| `DisableAccountSkill.ts` | Deshabilita cuenta sobre `MOCK_USERS` — ídem |
+| `PermissionValidationSkill.ts` | Dos familias de funciones: legacy (`canAccess`/`getAllowedFields`, contra `roles.config.ts`, solo usadas por el modo mock) y dinámicas (`getViewableFields`/`getEditableFields`/etc., contra `FieldConfig[]` real de `gov.RoleFieldPermissions`) |
 | `AuditSkill.ts` | Registra entrada de auditoría |
+
+> **Nota de arquitectura (2026-07-16):** `UpdateAttributeSkill`/`EnableAccountSkill`/`DisableAccountSkill`
+> ya no son el camino real de escritura — quedaron confinados al modo
+> `VITE_USE_MOCK_DATA=true` (ver `UserProfileAgent.updateField` y
+> `UserStatusAgent.enable/disable`). Bajo `VITE_USE_MOCK_DATA=false` toda
+> escritura de usuario pasa por `api/usersApi.ts` → `PATCH /api/users/...` real.
+
+## Cliente API — `api/usersApi.ts`
+
+| Función | Endpoint |
+|---------|----------|
+| `updateUserAttribute(sam, adAttributeName, value, previousValue)` | `PATCH /api/users/{sam}/attributes/{adAttributeName}` |
+| `updateAccountStatus(sam, enabled)` | `PATCH /api/users/{sam}/status` |
+
+Sin fallback a mock: bajo `VITE_USE_MOCK_DATA=false`, cualquier error de red/API
+se relanza tal cual (vía `apiFetch`) y llega como error real al caller.
 
 ## Agents
 
 | Archivo | Responsabilidad |
 |---------|----------------|
 | `UserSearchAgent.ts` | Llama API real → fallback mock; mapea `ApiSearchResultDto` → `User` |
-| `UserProfileAgent.ts` | Obtiene perfil completo de un usuario |
-| `UserStatusAgent.ts` | Gestiona habilitar/deshabilitar cuenta |
-| `PermissionAgent.ts` | Valida permisos de campo para el rol activo |
-| `AuditAgent.ts` | Registra y recupera entradas de auditoría |
+| `UserProfileAgent.ts` | Obtiene perfil completo (`getProfile`, siempre API real) y escribe atributos (`updateField` — API real vía `usersApi`, o mock bajo `VITE_USE_MOCK_DATA=true`) |
+| `UserStatusAgent.ts` | Habilita/deshabilita cuenta — API real vía `usersApi`, o mock bajo `VITE_USE_MOCK_DATA=true` |
+| `PermissionAgent.ts` | Sin consumidores en el frontend — candidato a eliminación en una fase futura de limpieza, no removido todavía |
+| `AuditAgent.ts` | Sin consumidores reales (`AuditPage` consume `api/auditApi.ts` directo) — mismo caso que `PermissionAgent.ts` |
 
 ## UserSearchAgent — flujo detallado
 

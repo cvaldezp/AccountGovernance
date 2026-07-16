@@ -13,7 +13,7 @@ import { AppButton, AppCard, AppBadge, AppPageHeader } from '../../shared/ui';
 import { AttributeValueRenderer } from '../../shared/attribute-rendering/AttributeValueRenderer';
 import { looksLikeHtml } from '../../shared/attribute-rendering/detectors';
 import { HtmlAttributeEditModal } from '../../shared/attribute-rendering/HtmlAttributeEditModal';
-import type { User, FieldName, FieldConfig } from '../../types';
+import type { User, FieldConfig } from '../../types';
 
 // El campo de estado de cuenta se identifica por dos alias posibles:
 // 'userAccountControl' (AdAttributeName real, gov.FieldDefinitions — API real)
@@ -302,26 +302,41 @@ export function UserDetailPage() {
     setTimeout(() => setFeedback(null), 3500);
   };
 
+  // Fuente de verdad tras cualquier escritura: se vuelve a consultar el perfil
+  // real en vez de fusionar el valor enviado en el estado local — la pantalla
+  // siempre refleja lo que AD realmente tiene, nunca lo que el cliente asume
+  // que se guardó.
+  const refreshProfile = async () => {
+    if (!operator) return;
+    const res = await userProfileAgent.getProfile(userId, operator.role);
+    if (res.success && res.data) setUserData(res.data);
+  };
+
   // overrideValue: usado por el editor HTML (maneja su propio borrador local en
   // el modal) para guardar sin depender de `editValue` del padre — setearlo y
   // guardar en el mismo tick leería el valor de antes del set (closure stale).
-  const handleSave = async (adAttributeName: string, displayName: string, overrideValue?: string) => {
+  // previousValue: el valor mostrado en pantalla antes de editar — viaja al
+  // backend para el chequeo de concurrencia (409 si ya cambió en AD).
+  const handleSave = async (
+    adAttributeName: string, displayName: string, previousValue: string, overrideValue?: string,
+  ) => {
     if (!operator || !userData) return;
     const valueToSave = overrideValue ?? editValue;
     setSaving(true);
     const res = await userProfileAgent.updateField(
       userId,
-      adAttributeName as FieldName,
+      adAttributeName,
       valueToSave,
+      previousValue,
       operator.name,
       operator.role,
     );
     if (res.success) {
-      setUserData(prev =>
-        prev ? { ...prev, attributes: { ...prev.attributes, [adAttributeName]: valueToSave } } : prev,
-      );
+      await refreshProfile();
       showFeedback('success', `"${displayName}" actualizado correctamente`);
     } else {
+      // Sin mutación optimista: userData nunca se tocó, así que no hay nada
+      // que revertir — el valor anterior sigue en pantalla tal cual.
       showFeedback('error', res.error ?? 'Error al actualizar');
     }
     setEditField(null);
@@ -337,11 +352,8 @@ export function UserDetailPage() {
       : await userStatusAgent.enable(userId, operator.name, operator.role);
 
     if (res.success) {
-      const newStatus: 'Enabled' | 'Disabled' = isEnabled ? 'Disabled' : 'Enabled';
-      setUserData(prev =>
-        prev ? { ...prev, attributes: { ...prev.attributes, AccountStatus: newStatus } } : prev,
-      );
-      showFeedback('success', `Cuenta ${newStatus === 'Enabled' ? 'habilitada' : 'deshabilitada'} correctamente`);
+      await refreshProfile();
+      showFeedback('success', `Cuenta ${isEnabled ? 'deshabilitada' : 'habilitada'} correctamente`);
     } else {
       showFeedback('error', res.error ?? 'Error al cambiar estado');
     }
@@ -465,7 +477,7 @@ export function UserDetailPage() {
                   saving={saving}
                   onStartEdit={() => { setEditField(fieldConf.adAttributeName); setEditValue(rawValue); }}
                   onChangeEdit={setEditValue}
-                  onSave={overrideValue => handleSave(fieldConf.adAttributeName, fieldConf.displayName, overrideValue)}
+                  onSave={overrideValue => handleSave(fieldConf.adAttributeName, fieldConf.displayName, rawValue, overrideValue)}
                   onCancel={() => setEditField(null)}
                 />
               );

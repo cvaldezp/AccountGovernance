@@ -1,5 +1,43 @@
 # Changelog
 
+## [2026-07-16] — Hito v1: integración real con Active Directory
+
+### Agregado
+
+**Backend**
+- `PATCH /api/users/{samAccountName}/attributes/{adAttributeName}` — escritura real de atributos AD vía LDAP `ModifyRequest` (Replace/Delete), con validación de denylist de atributos protegidos, `FieldDefinition` activo, `CanEdit` real por rol, `DataType`, chequeo de concurrencia (`previousValue` → 409) y auditoría real
+- `PATCH /api/users/{samAccountName}/status` — habilita/deshabilita cuenta con toggle seguro del bit `ACCOUNTDISABLE` de `userAccountControl` (preserva el resto de flags; no reutiliza el overwrite fijo 512/514 de creación de cuenta)
+- `IAdGateway.UpdateUserAttributeAsync` / `SetAccountEnabledAsync` — nuevos métodos LDAP de escritura
+- `UserService.UpdateAttributeAsync` / `UpdateAccountStatusAsync` — orquestación de validaciones + auditoría
+- `AttributeValueValidator` — validación/normalización extensible por `DataType` (string/integer/flags/boolean/datetime/dn)
+- Reutiliza `AuditActionType.UpdateField` / `EnableAccount` / `DisableAccount` (existían en el enum desde una fase previa sin consumidor real)
+
+**Frontend**
+- `api/usersApi.ts` — cliente real de escritura (`updateUserAttribute`, `updateAccountStatus`)
+- `UserProfileAgent.updateField` y `UserStatusAgent.enable/disable` — rama real (API) vs. mock (`VITE_USE_MOCK_DATA=true`), sin fallback silencioso
+- `UserDetailPage` — tras un guardado exitoso, re-consulta `GET /api/users/{sam}` y refresca desde el valor real de AD, en vez de mutación optimista local
+
+### Corregido
+
+- El botón "Guardar" de Detalle de Usuario devolvía "Usuario no encontrado" para cualquier usuario real — resuelto: el flujo comparaba el `samAccountName` real contra IDs de `MOCK_USERS` (`'1'`, `'a1'`, etc.), nunca llegaba al backend
+
+### Cierre de fase — módulos ya sin mocks (bajo `VITE_USE_MOCK_DATA=false`)
+
+Catálogo de atributos AD, Matriz de Permisos, Auditoría, Búsqueda de Usuario,
+Detalle de Usuario (lectura y escritura), habilitar/deshabilitar cuenta.
+Detalle en `docs/backend/endpoints.md` y `docs/frontend/agents-skills.md`.
+
+### Deuda de documentación conocida (no resuelta en este hito)
+
+- `docs/backend/database.md` — el esquema de `gov.AuditEntries`/`gov.FieldDefinitions`
+  documentado no coincide con `schema.sql`/las entidades reales (`AuditEntry`,
+  `FieldDefinition`) desde antes de este hito; pendiente de una revisión dedicada.
+- `agents/PermissionAgent.ts` y `agents/AuditAgent.ts` — cero consumidores en el
+  frontend, candidatos a eliminación en una fase de limpieza futura (no removidos
+  todavía, ver nota en `docs/frontend/agents-skills.md`).
+
+---
+
 ## [2026-06-17]
 
 ### Agregado

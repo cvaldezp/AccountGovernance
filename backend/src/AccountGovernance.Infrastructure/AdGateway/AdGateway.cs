@@ -648,6 +648,132 @@ public sealed class AdGateway(
         }, ct);
     }
 
+    // ── Attribute / account writes ────────────────────────────────────────────
+
+    public Task<bool> UpdateUserAttributeAsync(
+        string samAccountName, string adAttributeName, string? value, CancellationToken ct = default)
+    {
+        return Task.Run(() =>
+        {
+            using var conn = CreateConnection();
+            conn.Bind();
+
+            var escaped = EscapeLdap(samAccountName);
+            var filter  = $"(&(objectClass=user)(objectCategory=person)(sAMAccountName={escaped}))";
+            var searchReq = new SearchRequest(
+                options.Value.BaseDn, filter, SearchScope.Subtree, "distinguishedName")
+            {
+                SizeLimit = 1,
+                TimeLimit = TimeSpan.FromSeconds(options.Value.TimeoutSeconds),
+            };
+            var searchResp = (SearchResponse)conn.SendRequest(searchReq);
+            if (searchResp.Entries.Count == 0)
+            {
+                logger.LogWarning("UpdateUserAttributeAsync — user not found: {Sam}", samAccountName);
+                return false;
+            }
+            var dn = searchResp.Entries[0].DistinguishedName;
+
+            var mod = new DirectoryAttributeModification { Name = adAttributeName };
+            if (string.IsNullOrEmpty(value))
+            {
+                // Delete-with-no-value removes the attribute entirely — more correct
+                // than Replace with "" for AD attributes that reject an empty string.
+                mod.Operation = DirectoryAttributeOperation.Delete;
+            }
+            else
+            {
+                mod.Operation = DirectoryAttributeOperation.Replace;
+                mod.Add(value);
+            }
+
+            var req = new ModifyRequest(dn);
+            req.Modifications.Add(mod);
+
+            try
+            {
+                conn.SendRequest(req);
+                logger.LogInformation(
+                    "AD attribute updated — SAM: {Sam}, Attr: {Attr}", samAccountName, adAttributeName);
+                return true;
+            }
+            catch (DirectoryOperationException ex)
+            {
+                logger.LogError(ex,
+                    "Failed to update attribute {Attr} for {Sam}", adAttributeName, samAccountName);
+                return false;
+            }
+        }, ct);
+    }
+
+    public Task<bool> SetAccountEnabledAsync(
+        string samAccountName, bool enabled, CancellationToken ct = default)
+    {
+        return Task.Run(() =>
+        {
+            using var conn = CreateConnection();
+            conn.Bind();
+
+            var escaped = EscapeLdap(samAccountName);
+            var filter  = $"(&(objectClass=user)(objectCategory=person)(sAMAccountName={escaped}))";
+            var searchReq = new SearchRequest(
+                options.Value.BaseDn, filter, SearchScope.Subtree, "distinguishedName", "userAccountControl")
+            {
+                SizeLimit = 1,
+                TimeLimit = TimeSpan.FromSeconds(options.Value.TimeoutSeconds),
+            };
+            var searchResp = (SearchResponse)conn.SendRequest(searchReq);
+            if (searchResp.Entries.Count == 0)
+            {
+                logger.LogWarning("SetAccountEnabledAsync — user not found: {Sam}", samAccountName);
+                return false;
+            }
+
+            var entry  = searchResp.Entries[0];
+            var dn     = entry.DistinguishedName;
+            var uacRaw = GetStringAttr(entry, "userAccountControl");
+            if (uacRaw is null || !int.TryParse(uacRaw, out var currentUac))
+            {
+                logger.LogError(
+                    "SetAccountEnabledAsync — could not read userAccountControl for {Sam}", samAccountName);
+                return false;
+            }
+
+            // Toggle only bit 2 (ACCOUNTDISABLE) — read-modify-write on the full
+            // integer preserves every other flag already set on the account
+            // (DONT_EXPIRE_PASSWORD, SMARTCARD_REQUIRED, etc.). Deliberately NOT
+            // reusing CreateUserAsync's fixed 512/514 overwrite, which only works
+            // because that account has no other flags yet.
+            var newUac = enabled ? (currentUac & ~2) : (currentUac | 2);
+            if (newUac == currentUac)
+                return true; // already in the desired state — no-op (UserService already short-circuits this, this is defense in depth)
+
+            var mod = new DirectoryAttributeModification
+            {
+                Name      = "userAccountControl",
+                Operation = DirectoryAttributeOperation.Replace,
+            };
+            mod.Add(newUac.ToString());
+
+            var req = new ModifyRequest(dn);
+            req.Modifications.Add(mod);
+
+            try
+            {
+                conn.SendRequest(req);
+                logger.LogInformation(
+                    "Account status changed — SAM: {Sam}, Enabled: {Enabled}, UAC {Old} -> {New}",
+                    samAccountName, enabled, currentUac, newUac);
+                return true;
+            }
+            catch (DirectoryOperationException ex)
+            {
+                logger.LogError(ex, "Failed to change account status for {Sam}", samAccountName);
+                return false;
+            }
+        }, ct);
+    }
+
     private static string? GetStringAttr(SearchResultEntry entry, string name)
     {
         var attr = entry.Attributes[name];

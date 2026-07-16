@@ -3,6 +3,8 @@ import { getUserById, getVisibleAttributes } from '../skills/GetUserAttributesSk
 import { updateAttribute } from '../skills/UpdateAttributeSkill';
 import { addAuditEntry } from '../api/auditApi';
 import { authFetch } from '../api/authFetch';
+import { errorMessage } from '../api/apiFetch';
+import { usersApi } from '../api/usersApi';
 
 const env = (import.meta as { env?: Record<string, string | undefined> }).env ?? {};
 
@@ -127,31 +129,45 @@ export class UserProfileAgent {
 
   async updateField(
     userId: string,
-    field: FieldName,
+    field: string,
     newValue: string,
+    previousValue: string | null,
     operatorName: string,
     role: RoleName,
   ): Promise<AgentResult<void>> {
-    const result = await updateAttribute(userId, field, newValue, role);
-    const user   = await getUserById(userId);
+    if (MOCK_MODE) {
+      const result = await updateAttribute(userId, field as FieldName, newValue, role);
+      const user   = await getUserById(userId);
 
-    // email domain is used for audit context only — never used as account identifier
-    const domain = user ? (user.email.split('@')[1]?.toUpperCase() ?? 'UNKNOWN') : 'UNKNOWN';
+      // email domain is used for audit context only — never used as account identifier
+      const domain = user ? (user.email.split('@')[1]?.toUpperCase() ?? 'UNKNOWN') : 'UNKNOWN';
 
-    addAuditEntry({
-      performedBy: operatorName,
-      roleName:    role,
-      actionType:  'UpdateField',
-      fieldKey:    field,
-      oldValue:    result.data?.oldValue,
-      newValue:    result.data?.newValue,
-      targetUser:  user?.username ?? userId,
-      domain,
-      success:     result.success,
-    });
+      addAuditEntry({
+        performedBy: operatorName,
+        roleName:    role,
+        actionType:  'UpdateField',
+        fieldKey:    field as FieldName,
+        oldValue:    result.data?.oldValue,
+        newValue:    result.data?.newValue,
+        targetUser:  user?.username ?? userId,
+        domain,
+        success:     result.success,
+      });
 
-    if (!result.success) return { success: false, error: result.error };
-    return { success: true };
+      if (!result.success) return { success: false, error: result.error };
+      return { success: true };
+    }
+
+    // Real API — sin latencia simulada, sin éxito simulado, sin fallback a
+    // MOCK_USERS. El backend resuelve rol/permisos desde la sesión y escribe a
+    // AD real; la entrada de auditoría real la crea el backend, no este agente
+    // (addAuditEntry() de auditApi.ts es solo el eco inerte del modo mock).
+    try {
+      await usersApi.updateUserAttribute(userId, field, newValue, previousValue);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: errorMessage(err) };
+    }
   }
 }
 

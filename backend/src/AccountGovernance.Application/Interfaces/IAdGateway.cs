@@ -152,4 +152,30 @@ public interface IAdGateway
 
     /// <summary>Returns the DN of each group the specified user is a direct member of (via memberOf attribute).</summary>
     Task<IReadOnlyList<string>> GetUserGroupDnsAsync(string upn, CancellationToken ct = default);
+
+    // ── Attribute / account writes ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Writes a single AD attribute for an existing user. A null or empty
+    /// <paramref name="value"/> deletes the attribute (LDAP Delete) instead of
+    /// replacing it with an empty string. Never call this with a protected
+    /// attribute (distinguishedName, objectGUID, userAccountControl, etc.) —
+    /// callers are responsible for denylist checks; this method has no attribute
+    /// name validation of its own. Returns false when the user is not found or
+    /// the LDAP write fails.
+    /// </summary>
+    Task<bool> UpdateUserAttributeAsync(
+        string samAccountName, string adAttributeName, string? value, CancellationToken ct = default);
+
+    /// <summary>
+    /// Enables or disables a user account by toggling only the ACCOUNTDISABLE bit
+    /// (value 2) of userAccountControl — reads the current integer value first and
+    /// writes back the full value with only that bit changed, so every other flag
+    /// (DONT_EXPIRE_PASSWORD, SMARTCARD_REQUIRED, etc.) is preserved. Does not reuse
+    /// the fixed 512/514 overwrite from CreateUserAsync, which assumes a freshly
+    /// created account with no other flags set. Returns false when the user is not
+    /// found or the LDAP write fails.
+    /// </summary>
+    Task<bool> SetAccountEnabledAsync(
+        string samAccountName, bool enabled, CancellationToken ct = default);
 }
