@@ -22,9 +22,14 @@ public static class DependencyInjection
         // Database
         services.AddSingleton<IDbConnectionFactory, SqlConnectionFactory>();
 
+        // Cache — respaldo de IFieldDefinitionsCache (TTL corto, invalidado
+        // explícitamente al crear/editar/activar/inactivar un atributo).
+        services.AddMemoryCache();
+
         // Repositories
         services.AddScoped<IAuditRepository,                      AuditRepository>();
         services.AddScoped<IPermissionRepository,                  PermissionRepository>();
+        services.AddScoped<IFieldDefinitionsCache,                 FieldDefinitionsCache>();
         services.AddScoped<IAccountTypeRepository,                 AccountTypeRepository>();
         services.AddScoped<IAccountCreationAuditRepository,        AccountCreationAuditRepository>();
         services.AddScoped<IAccountTypeGroupRepository,  AccountTypeGroupRepository>();

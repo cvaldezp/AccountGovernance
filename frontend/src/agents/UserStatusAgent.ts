@@ -13,7 +13,7 @@ export class UserStatusAgent {
     addAuditEntry({
       performedBy: operatorName,
       roleName:    role,
-      actionType:  'ENABLE_ACCOUNT',
+      actionType:  'EnableAccount',
       fieldKey:    'AccountStatus',
       oldValue:    result.success ? 'Disabled' : undefined,
       newValue:    result.success ? 'Enabled'  : undefined,
@@ -33,7 +33,7 @@ export class UserStatusAgent {
     addAuditEntry({
       performedBy: operatorName,
       roleName:    role,
-      actionType:  'DISABLE_ACCOUNT',
+      actionType:  'DisableAccount',
       fieldKey:    'AccountStatus',
       oldValue:    result.success ? 'Enabled'  : undefined,
       newValue:    result.success ? 'Disabled' : undefined,

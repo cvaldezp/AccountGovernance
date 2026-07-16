@@ -14,4 +14,11 @@ public sealed class FieldDefinition
     public int                SortOrder       { get; init; }
     public IReadOnlyList<string>? AllowedValues { get; init; }
     public string?            Placeholder     { get; init; }
+    public string?            Category        { get; init; }
+    public string?            DataType        { get; init; }
+    public bool                RequiresAudit  { get; init; }
+    public string?            CreatedBy       { get; init; }
+    public string?            UpdatedBy       { get; init; }
+    public DateTime           CreatedAt       { get; init; }
+    public DateTime           UpdatedAt       { get; init; }
 }

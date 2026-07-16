@@ -19,6 +19,12 @@ export type { AppTableProps, Column } from './components/AppTable';
 export { AppPageHeader } from './components/AppPageHeader';
 export type { AppPageHeaderProps } from './components/AppPageHeader';
 
+export { AppModal } from './components/AppModal';
+export type {
+  AppModalProps, ModalSize,
+  AppModalHeaderProps, AppModalBodyProps, AppModalFooterProps,
+} from './components/AppModal';
+
 export { colors } from './tokens/colors';
 export { typography } from './tokens/typography';
 export { spacing, radii } from './tokens/spacing';

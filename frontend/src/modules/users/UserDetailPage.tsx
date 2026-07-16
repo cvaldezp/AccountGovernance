@@ -10,7 +10,18 @@ import {
   getReadOnlyFields,
 } from '../../skills/PermissionValidationSkill';
 import { AppButton, AppCard, AppBadge, AppPageHeader } from '../../shared/ui';
+import { AttributeValueRenderer } from '../../shared/attribute-rendering/AttributeValueRenderer';
+import { looksLikeHtml } from '../../shared/attribute-rendering/detectors';
+import { HtmlAttributeEditModal } from '../../shared/attribute-rendering/HtmlAttributeEditModal';
 import type { User, FieldName, FieldConfig } from '../../types';
+
+// El campo de estado de cuenta se identifica por dos alias posibles:
+// 'userAccountControl' (AdAttributeName real, gov.FieldDefinitions — API real)
+// y 'AccountStatus' (alias legado usado por el modo mock). Centralizado acá
+// para no repetir la comparación en cada punto que necesita distinguir este campo.
+function isAccountStatusField(adAttributeName: string): boolean {
+  return adAttributeName === 'userAccountControl' || adAttributeName === 'AccountStatus';
+}
 
 // ── Role permissions matrix panel ────────────────────────────────────────────
 // Shows what the active role can do with each AD field in this view.
@@ -147,8 +158,12 @@ function FieldInput({
 }
 
 // ── Internal: read-only display of a field value ─────────────────────────────
-function FieldValueDisplay({ adAttributeName, value }: { adAttributeName: string; value: string }) {
-  if (adAttributeName === 'AccountStatus') {
+// Estado de Cuenta es un caso de negocio (no inferible del contenido) y se
+// resuelve acá, antes de delegar el resto a AttributeValueRenderer — que
+// decide la representación genérica (texto plano, HTML con vista previa, y
+// en el futuro email/URL/JSON/etc.) sin conocer nada sobre atributos puntuales.
+function FieldValueDisplay({ fieldConf, value }: { fieldConf: FieldConfig; value: string }) {
+  if (isAccountStatusField(fieldConf.adAttributeName)) {
     const variant =
       value === 'Enabled' ? 'success' :
       value === 'Locked'  ? 'warning' :
@@ -162,7 +177,7 @@ function FieldValueDisplay({ adAttributeName, value }: { adAttributeName: string
   if (!value) {
     return <em style={{ color: 'var(--ds-neutral-400)', fontSize: '13px' }}>Sin valor</em>;
   }
-  return <span>{value}</span>;
+  return <AttributeValueRenderer value={value} field={fieldConf} />;
 }
 
 // ── Internal: one attribute row ──────────────────────────────────────────────
@@ -184,10 +199,14 @@ function AttributeRow({
   saving: boolean;
   onStartEdit: () => void;
   onChangeEdit: (v: string) => void;
-  onSave: () => void;
+  onSave: (overrideValue?: string) => void;
   onCancel: () => void;
 }) {
-  const isStatusField = fieldConf.adAttributeName === 'AccountStatus';
+  const isStatusField = isAccountStatusField(fieldConf.adAttributeName);
+  // El valor de un atributo HTML se edita en un modal con editor + vista previa
+  // en vivo (mejor UX para marcado multilínea) en vez del <textarea> inline
+  // genérico — decidido por la forma del contenido, no por el nombre del campo.
+  const isHtml = looksLikeHtml(value);
 
   return (
     <div style={{ padding: '14px 0', borderBottom: '1px solid var(--ds-neutral-100)' }}>
@@ -207,10 +226,10 @@ function AttributeRow({
         </div>
       )}
 
-      {isEditing ? (
+      {isEditing && !isHtml ? (
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <FieldInput fieldConf={fieldConf} value={editValue} onChange={onChangeEdit} />
-          <AppButton size="sm" variant="primary" onClick={onSave} loading={saving}>
+          <AppButton size="sm" variant="primary" onClick={() => onSave()} loading={saving}>
             Guardar
           </AppButton>
           <AppButton size="sm" variant="secondary" onClick={onCancel}>
@@ -219,15 +238,26 @@ function AttributeRow({
         </div>
       ) : (
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span className="detail-field-value">
-            <FieldValueDisplay adAttributeName={fieldConf.adAttributeName} value={value} />
-          </span>
+          <div className="detail-field-value" style={{ flex: 1 }}>
+            <FieldValueDisplay fieldConf={fieldConf} value={value} />
+          </div>
           {fieldConf.canEdit && !isStatusField && (
             <AppButton size="sm" variant="secondary" onClick={onStartEdit}>
               Editar
             </AppButton>
           )}
         </div>
+      )}
+
+      {isHtml && (
+        <HtmlAttributeEditModal
+          open={isEditing}
+          title={fieldConf.displayName}
+          initialValue={value}
+          saving={saving}
+          onSave={draft => onSave(draft)}
+          onCancel={onCancel}
+        />
       )}
     </div>
   );
@@ -237,7 +267,7 @@ function AttributeRow({
 export function UserDetailPage() {
   const { user: operator } = useAuth();
   const { params, navigate } = useRouter();
-  const { fieldConfigs, loading: configLoading } = useFieldConfig();
+  const { fieldConfigs, loading: configLoading, error: fieldConfigError } = useFieldConfig();
   const userId = params.userId ?? '';
 
   const [userData, setUserData]   = useState<User | null>(null);
@@ -249,7 +279,7 @@ export function UserDetailPage() {
   const [saving, setSaving]       = useState(false);
 
   const viewableFields  = getViewableFields(fieldConfigs);
-  const statusFieldConf = viewableFields.find(f => f.adAttributeName === 'AccountStatus');
+  const statusFieldConf = viewableFields.find(f => isAccountStatusField(f.adAttributeName));
   const canEditStatus   = !!statusFieldConf?.canEdit;
 
   useEffect(() => {
@@ -272,19 +302,23 @@ export function UserDetailPage() {
     setTimeout(() => setFeedback(null), 3500);
   };
 
-  const handleSave = async (adAttributeName: string, displayName: string) => {
+  // overrideValue: usado por el editor HTML (maneja su propio borrador local en
+  // el modal) para guardar sin depender de `editValue` del padre — setearlo y
+  // guardar en el mismo tick leería el valor de antes del set (closure stale).
+  const handleSave = async (adAttributeName: string, displayName: string, overrideValue?: string) => {
     if (!operator || !userData) return;
+    const valueToSave = overrideValue ?? editValue;
     setSaving(true);
     const res = await userProfileAgent.updateField(
       userId,
       adAttributeName as FieldName,
-      editValue,
+      valueToSave,
       operator.name,
       operator.role,
     );
     if (res.success) {
       setUserData(prev =>
-        prev ? { ...prev, attributes: { ...prev.attributes, [adAttributeName]: editValue } } : prev,
+        prev ? { ...prev, attributes: { ...prev.attributes, [adAttributeName]: valueToSave } } : prev,
       );
       showFeedback('success', `"${displayName}" actualizado correctamente`);
     } else {
@@ -411,7 +445,9 @@ export function UserDetailPage() {
         >
           <RolePermissionsPanel fieldConfigs={fieldConfigs} />
 
-          {viewableFields.length === 0 ? (
+          {fieldConfigError ? (
+            <div className="ds-alert ds-alert--error">{fieldConfigError}</div>
+          ) : viewableFields.length === 0 ? (
             <p style={{ color: 'var(--ds-neutral-400)', fontSize: '14px' }}>
               Tu rol no tiene acceso a ning&uacute;n atributo.
             </p>
@@ -429,7 +465,7 @@ export function UserDetailPage() {
                   saving={saving}
                   onStartEdit={() => { setEditField(fieldConf.adAttributeName); setEditValue(rawValue); }}
                   onChangeEdit={setEditValue}
-                  onSave={() => handleSave(fieldConf.adAttributeName, fieldConf.displayName)}
+                  onSave={overrideValue => handleSave(fieldConf.adAttributeName, fieldConf.displayName, overrideValue)}
                   onCancel={() => setEditField(null)}
                 />
               );

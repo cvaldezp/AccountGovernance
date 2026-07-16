@@ -477,6 +477,172 @@ BEGIN
 END
 GO
 
+-- ── Migration: extend gov.FieldDefinitions / gov.RoleFieldPermissions for the
+--    attribute-admin module (idempotent). Category/DataType stay nullable in
+--    this phase — hardening to NOT NULL is a later migration once every row
+--    has real values. RequiresAudit is a plain business boolean (no need for
+--    a third state), so it goes straight to NOT NULL DEFAULT(0). ───────────
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('gov.FieldDefinitions') AND name = 'Category')
+    ALTER TABLE gov.FieldDefinitions ADD Category NVARCHAR(50) NULL;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('gov.FieldDefinitions') AND name = 'DataType')
+    ALTER TABLE gov.FieldDefinitions ADD DataType NVARCHAR(50) NULL;
+GO
+
+-- RequiresAudit: el ADD y el backfill de los 4 seed corren solo la primera vez
+-- que se crea la columna — en cualquier ejecución posterior de este script
+-- (columna ya existente) ambos se saltan, así que un valor cambiado
+-- manualmente desde el admin nunca se revierte si este script se vuelve a
+-- correr por error o para validación (schema.sql es de aplicación manual,
+-- no se ejecuta automáticamente en cada arranque de la app).
+--
+-- SQL Server valida los nombres de columna en tiempo de compilación de cada
+-- batch: un ALTER TABLE...ADD y un UPDATE que use esa columna NO pueden vivir
+-- en el mismo batch (falla con "Invalid column name"), así que van separados
+-- por GO. Para que el backfill sepa si la columna se acaba de crear en ESTA
+-- ejecución (y no simplemente ya existía de antes), el primer batch deja una
+-- bandera en una tabla temporal de sesión (#RequiresAuditJustAdded); el
+-- segundo batch backfillea solo si encuentra esa bandera.
+IF COL_LENGTH('gov.FieldDefinitions', 'RequiresAudit') IS NULL
+BEGIN
+    ALTER TABLE gov.FieldDefinitions
+        ADD RequiresAudit BIT NOT NULL
+        CONSTRAINT DF_Gov_FieldDefinitions_RequiresAudit DEFAULT(0);
+
+    IF OBJECT_ID('tempdb..#RequiresAuditJustAdded') IS NOT NULL DROP TABLE #RequiresAuditJustAdded;
+    CREATE TABLE #RequiresAuditJustAdded (Flag BIT);
+    INSERT INTO #RequiresAuditJustAdded VALUES (1);
+END
+GO
+
+IF OBJECT_ID('tempdb..#RequiresAuditJustAdded') IS NOT NULL
+BEGIN
+    UPDATE gov.FieldDefinitions
+    SET RequiresAudit = 1
+    WHERE FieldKey IN ('field-ext-email', 'field-account-status');
+
+    -- field-office y field-telephone permanecen en 0 por el DEFAULT.
+    DROP TABLE #RequiresAuditJustAdded;
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('gov.FieldDefinitions') AND name = 'CreatedBy')
+    ALTER TABLE gov.FieldDefinitions ADD CreatedBy NVARCHAR(256) NULL;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('gov.FieldDefinitions') AND name = 'UpdatedBy')
+    ALTER TABLE gov.FieldDefinitions ADD UpdatedBy NVARCHAR(256) NULL;
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('gov.RoleFieldPermissions') AND name = 'UpdatedAt')
+    ALTER TABLE gov.RoleFieldPermissions ADD UpdatedAt DATETIME2 NOT NULL DEFAULT(GETUTCDATE());
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('gov.RoleFieldPermissions') AND name = 'UpdatedBy')
+    ALTER TABLE gov.RoleFieldPermissions ADD UpdatedBy NVARCHAR(256) NULL;
+GO
+
+-- Backfill de Category/DataType para los 4 registros seed existentes.
+-- COALESCE por columna: si alguien ya los configuró manualmente (desde el
+-- futuro admin o a mano en BD), ese valor se conserva; solo se completa lo
+-- que esté en NULL. A diferencia de RequiresAudit, este backfill sí puede
+-- repetirse en cualquier reejecución manual del script sin riesgo, porque
+-- COALESCE nunca pisa un valor ya no-NULL.
+UPDATE gov.FieldDefinitions SET
+    Category = COALESCE(Category, 'contact'),
+    DataType = COALESCE(DataType, 'string')
+    WHERE FieldKey = 'field-ext-email';
+
+UPDATE gov.FieldDefinitions SET
+    Category = COALESCE(Category, 'organizational'),
+    DataType = COALESCE(DataType, 'string')
+    WHERE FieldKey = 'field-office';
+
+UPDATE gov.FieldDefinitions SET
+    Category = COALESCE(Category, 'contact'),
+    DataType = COALESCE(DataType, 'string')
+    WHERE FieldKey = 'field-telephone';
+
+UPDATE gov.FieldDefinitions SET
+    Category = COALESCE(Category, 'account'),
+    DataType = COALESCE(DataType, 'flags')
+    WHERE FieldKey = 'field-account-status';
+GO
+
+-- Constraint única de AdAttributeName — solo se crea si no hay duplicados hoy.
+-- Si los hay: PRINT explicativo + SELECT de los registros duplicados, se omite
+-- únicamente la creación de la constraint, y el resto del script sigue normal
+-- (nada de RAISERROR/THROW que pueda abortar el batch).
+IF EXISTS (
+    SELECT AdAttributeName FROM gov.FieldDefinitions
+    GROUP BY AdAttributeName HAVING COUNT(*) > 1
+)
+BEGIN
+    PRINT 'ADVERTENCIA: no se creó UQ_Gov_FieldDefinitions_AdAttributeName porque existen valores de AdAttributeName duplicados en gov.FieldDefinitions. Revisa el SELECT de duplicados a continuación, resuélvelos manualmente y vuelve a ejecutar el script para que la constraint se cree.';
+
+    SELECT FieldKey, AdAttributeName
+    FROM gov.FieldDefinitions
+    WHERE AdAttributeName IN (
+        SELECT AdAttributeName FROM gov.FieldDefinitions
+        GROUP BY AdAttributeName HAVING COUNT(*) > 1
+    )
+    ORDER BY AdAttributeName, FieldKey;
+END
+ELSE IF NOT EXISTS (
+    SELECT 1 FROM sys.key_constraints
+    WHERE name = 'UQ_Gov_FieldDefinitions_AdAttributeName'
+      AND parent_object_id = OBJECT_ID('gov.FieldDefinitions')
+)
+BEGIN
+    ALTER TABLE gov.FieldDefinitions
+        ADD CONSTRAINT UQ_Gov_FieldDefinitions_AdAttributeName UNIQUE (AdAttributeName);
+END
+GO
+
+-- ── Verificación de la migración de atributos AD. schema.sql es un script de
+--    aplicación manual (no corre en cada arranque de la app — nada en el
+--    código lo invoca, ver Program.cs), así que estas consultas se imprimen
+--    únicamente cuando alguien lo ejecuta a mano (sqlcmd/SSMS/Azure Data
+--    Studio), justo para que el DBA valide el resultado de la migración. ────
+
+PRINT '--- Verificación: columnas creadas ---';
+SELECT t.name AS TableName, c.name AS ColumnName, ty.name AS DataType, c.is_nullable
+FROM   sys.columns c
+JOIN   sys.tables  t  ON c.object_id = t.object_id
+JOIN   sys.types   ty ON c.user_type_id = ty.user_type_id
+WHERE  t.name IN ('FieldDefinitions', 'RoleFieldPermissions')
+  AND  c.name IN ('Category','DataType','RequiresAudit','CreatedBy','UpdatedBy','UpdatedAt')
+ORDER BY t.name, c.name;
+
+PRINT '--- Verificación: metadata resultante de gov.FieldDefinitions ---';
+SELECT FieldKey, AdAttributeName, Category, DataType, RequiresAudit, CreatedBy, UpdatedBy
+FROM   gov.FieldDefinitions
+ORDER BY SortOrder;
+
+PRINT '--- Verificación: constraint única UQ_Gov_FieldDefinitions_AdAttributeName ---';
+SELECT name, type_desc
+FROM   sys.key_constraints
+WHERE  parent_object_id = OBJECT_ID('gov.FieldDefinitions')
+  AND  name = 'UQ_Gov_FieldDefinitions_AdAttributeName';
+
+PRINT '--- Verificación: duplicados de AdAttributeName (debe estar vacío) ---';
+SELECT AdAttributeName, COUNT(*) AS Cantidad
+FROM   gov.FieldDefinitions
+GROUP BY AdAttributeName
+HAVING COUNT(*) > 1;
+
+PRINT '--- Verificación: total de registros en gov.FieldDefinitions ---';
+SELECT COUNT(*) AS TotalFieldDefinitions FROM gov.FieldDefinitions;
+
+PRINT '--- Verificación: distribución por Category ---';
+SELECT ISNULL(Category, '(sin categoría)') AS Category, COUNT(*) AS Cantidad
+FROM   gov.FieldDefinitions
+GROUP BY Category
+ORDER BY Category;
+GO
+
 -- ── 10. Global expiration configuration (singleton) ──────────────────────────
 -- One row controls which expiration options are available system-wide.
 -- The operator picks the actual expiration date at account-creation time.

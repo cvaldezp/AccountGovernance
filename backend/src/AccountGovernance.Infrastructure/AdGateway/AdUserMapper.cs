@@ -45,12 +45,30 @@ internal static class AdUserMapper
             : null;
     }
 
-    internal static User Map(SearchResultEntry entry)
+    /// <param name="requestedAttributes">
+    /// The exact attribute names that were requested from LDAP (i.e. the SearchRequest's
+    /// attribute list). Used to build <see cref="User.RawAttributes"/> keyed by those exact
+    /// names — AD echoes attribute names back in its own casing (observed: all lowercase)
+    /// via entry.Attributes.AttributeNames, which would silently break case-sensitive
+    /// dictionary lookups against gov.FieldDefinitions.AdAttributeName (e.g. "physicalDeliveryOfficeName").
+    /// entry.Attributes' indexer/Contains IS case-insensitive, so looking up each requested
+    /// name individually (rather than trusting AD's returned casing as the key) keeps the
+    /// dictionary key casing stable and predictable regardless of what the server echoes.
+    /// When null (callers that don't need the generic bag), falls back to AD's own casing.
+    /// </param>
+    internal static User Map(SearchResultEntry entry, IReadOnlyList<string>? requestedAttributes = null)
     {
-        // Collect all attributes into the raw bag
         var raw = new Dictionary<string, string?>();
-        foreach (string name in entry.Attributes.AttributeNames)
-            raw[name] = GetAttr(entry, name);
+        if (requestedAttributes is not null)
+        {
+            foreach (var name in requestedAttributes)
+                raw[name] = GetAttr(entry, name);
+        }
+        else
+        {
+            foreach (string name in entry.Attributes.AttributeNames)
+                raw[name] = GetAttr(entry, name);
+        }
 
         // userAccountControl bit 1 = ACCOUNTDISABLE (enabled when bit is NOT set)
         var uacStr  = GetAttr(entry, "userAccountControl");
@@ -67,22 +85,18 @@ internal static class AdUserMapper
             CustomBannerID    = GetAttr(entry, "CustomBannerID"),
 
             Email             = GetAttr(entry, "mail"),
-            ExternalEmail     = GetAttr(entry, "Custom-External-Email-Address"),
-            TelephoneNumber   = GetAttr(entry, "telephoneNumber"),
             Mobile            = GetAttr(entry, "mobile"),
 
             Company           = GetAttr(entry, "company"),
             Department        = GetAttr(entry, "department"),
             JobTitle          = GetAttr(entry, "title"),
             Manager           = GetAttr(entry, "manager"),
-            Office            = GetAttr(entry, "physicalDeliveryOfficeName"),
 
             ExtensionAttribute1  = GetAttr(entry, "extensionAttribute1"),
             ExtensionAttribute2  = GetAttr(entry, "extensionAttribute2"),
             ExtensionAttribute3  = GetAttr(entry, "extensionAttribute3"),
             ExtensionAttribute13 = GetAttr(entry, "extensionAttribute13"),
 
-            UserAccountControl = uacInt,
             IsEnabled          = enabled,
             WhenCreated        = GetGeneralizedTime(entry, "whenCreated"),
             WhenChanged        = GetGeneralizedTime(entry, "whenChanged"),

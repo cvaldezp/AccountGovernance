@@ -1,25 +1,36 @@
-import { useState, useEffect, useMemo } from 'react';
-import { getAuditEntries } from '../../api/auditApi';
+import { useAudit, PAGE_SIZE } from './useAudit';
 import { getFieldDefinitions } from '../../api/adFieldMatrix';
 import { ROLES_CONFIG } from '../../config/roles.config';
 import { AppButton, AppCard, AppBadge, AppPageHeader, AppInput } from '../../shared/ui';
-import type { AuditEntry, AuditActionType } from '../../types/audit';
+import type { AuditActionType } from '../../types/audit';
 import type { RoleName } from '../../types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const PAGE_SIZE = 10;
-
 const ACTION_LABELS: Record<AuditActionType, string> = {
-  UPDATE_FIELD:    'Actualización',
-  ENABLE_ACCOUNT:  'Habilitación',
-  DISABLE_ACCOUNT: 'Deshabilitación',
+  UpdateField:                   'Actualización',
+  EnableAccount:                 'Habilitación',
+  DisableAccount:                'Deshabilitación',
+  DistributionListMemberAdded:   'Agregado a lista de distribución',
+  DistributionListMemberRemoved: 'Removido de lista de distribución',
+  CreateAttribute:               'Atributo creado',
+  UpdateAttribute:               'Atributo editado',
+  ActivateAttribute:             'Atributo activado',
+  DeactivateAttribute:           'Atributo inactivado',
+  UpdateRolePermission:          'Permiso de rol editado',
 };
 
 const ACTION_VARIANT: Record<AuditActionType, 'info' | 'success' | 'warning'> = {
-  UPDATE_FIELD:    'info',
-  ENABLE_ACCOUNT:  'success',
-  DISABLE_ACCOUNT: 'warning',
+  UpdateField:                   'info',
+  EnableAccount:                 'success',
+  DisableAccount:                'warning',
+  DistributionListMemberAdded:   'success',
+  DistributionListMemberRemoved: 'warning',
+  CreateAttribute:               'success',
+  UpdateAttribute:               'info',
+  ActivateAttribute:             'success',
+  DeactivateAttribute:           'warning',
+  UpdateRolePermission:          'info',
 };
 
 const DOMAIN_COLOR: Record<string, string> = {
@@ -60,50 +71,16 @@ function fieldDisplayName(fieldKey: string | undefined): string {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function AuditPage() {
-  const [allEntries, setAllEntries] = useState<AuditEntry[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [page, setPage]             = useState(0);
-
-  const [filterUser,     setFilterUser]     = useState('');
-  const [filterAction,   setFilterAction]   = useState<AuditActionType | ''>('');
-  const [filterRole,     setFilterRole]     = useState<RoleName | ''>('');
-  const [filterDateFrom, setFilterDateFrom] = useState('');
-  const [filterDateTo,   setFilterDateTo]   = useState('');
-
-  useEffect(() => {
-    getAuditEntries().then(entries => {
-      setAllEntries(entries);
-      setLoading(false);
-    });
-  }, []);
-
-  const filtered = useMemo(() => {
-    let list = allEntries;
-    if (filterUser) {
-      const q = filterUser.toLowerCase();
-      list = list.filter(e =>
-        e.targetUser.toLowerCase().includes(q) ||
-        e.performedBy.toLowerCase().includes(q),
-      );
-    }
-    if (filterAction)   list = list.filter(e => e.actionType === filterAction);
-    if (filterRole)     list = list.filter(e => e.roleName === filterRole);
-    if (filterDateFrom) list = list.filter(e => e.timestamp.slice(0, 10) >= filterDateFrom);
-    if (filterDateTo)   list = list.filter(e => e.timestamp.slice(0, 10) <= filterDateTo);
-    return list;
-  }, [allEntries, filterUser, filterAction, filterRole, filterDateFrom, filterDateTo]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageData   = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const resetPage  = () => setPage(0);
-
-  const handleClear = () => {
-    setFilterUser(''); setFilterAction(''); setFilterRole('');
-    setFilterDateFrom(''); setFilterDateTo('');
-    setPage(0);
-  };
-
-  const hasFilters = !!(filterUser || filterAction || filterRole || filterDateFrom || filterDateTo);
+  const {
+    loading, loadError,
+    filtered, pageData, page, setPage, totalPages, resetPage,
+    filterUser, setFilterUser,
+    filterAction, setFilterAction,
+    filterRole, setFilterRole,
+    filterDateFrom, setFilterDateFrom,
+    filterDateTo, setFilterDateTo,
+    handleClear, hasFilters,
+  } = useAudit();
 
   return (
     <div>
@@ -111,6 +88,8 @@ export function AuditPage() {
         title="Auditoría"
         description="Registro completo de operaciones realizadas sobre cuentas de usuario Active Directory"
       />
+
+      {loadError && <div className="ds-alert ds-alert--error">{loadError}</div>}
 
       {/* Filters */}
       <AppCard title="Filtros" style={{ marginBottom: '16px' }}>
@@ -133,9 +112,9 @@ export function AuditPage() {
               onChange={e => { setFilterAction(e.target.value as AuditActionType | ''); resetPage(); }}
             >
               <option value="">Todas</option>
-              <option value="UPDATE_FIELD">Actualización</option>
-              <option value="ENABLE_ACCOUNT">Habilitación</option>
-              <option value="DISABLE_ACCOUNT">Deshabilitación</option>
+              {(Object.keys(ACTION_LABELS) as AuditActionType[]).map(action => (
+                <option key={action} value={action}>{ACTION_LABELS[action]}</option>
+              ))}
             </select>
           </div>
 

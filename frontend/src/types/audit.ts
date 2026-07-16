@@ -1,6 +1,18 @@
 import type { RoleName } from './index';
 
-export type AuditActionType = 'UPDATE_FIELD' | 'ENABLE_ACCOUNT' | 'DISABLE_ACCOUNT';
+// Valores reales del enum backend AuditActionType (Domain/Enums/AuditActionType.cs),
+// serializados vía .ToString() — PascalCase, no SCREAMING_SNAKE_CASE.
+export type AuditActionType =
+  | 'UpdateField'
+  | 'EnableAccount'
+  | 'DisableAccount'
+  | 'DistributionListMemberAdded'
+  | 'DistributionListMemberRemoved'
+  | 'CreateAttribute'
+  | 'UpdateAttribute'
+  | 'ActivateAttribute'
+  | 'DeactivateAttribute'
+  | 'UpdateRolePermission';
 
 export interface AuditEntry {
   id:          string;
@@ -23,4 +35,6 @@ export interface AuditFilters {
   roleName?:    RoleName | '';
   dateFrom?:    string;      // 'YYYY-MM-DD'
   dateTo?:      string;      // 'YYYY-MM-DD'
+  page?:        number;
+  pageSize?:    number;
 }

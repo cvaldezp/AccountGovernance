@@ -10,10 +10,12 @@ namespace AccountGovernance.Infrastructure.AdGateway;
 
 public sealed class AdGateway(
     IOptions<AdGatewayOptions> options,
-    ILogger<AdGateway>         logger
+    ILogger<AdGateway>         logger,
+    IFieldDefinitionsCache     fieldDefinitionsCache
 ) : IAdGateway
 {
-    // Minimal attribute set for search results (list view)
+    // Minimal attribute set for search results (list view) — unchanged, out of
+    // scope for the dynamic-attributes work (only the detail view needs it).
     private static readonly string[] SearchFetchAttributes =
     [
         "sAMAccountName", "displayName", "mail", "department",
@@ -22,20 +24,38 @@ public sealed class AdGateway(
         "userAccountControl",
     ];
 
-    // Full attribute set for the single-user detail view
-    private static readonly string[] DetailFetchAttributes =
+    // Structural attributes the app always needs for the detail view, regardless
+    // of what's configured in gov.FieldDefinitions. Attributes managed through
+    // the AD Attribute Catalog (Oficina, Teléfono, Email Externo, Estado de
+    // Cuenta técnico, y cualquier atributo futuro) NO viven acá — se agregan
+    // dinámicamente en GetDetailAttributesAsync().
+    private static readonly string[] BaseDetailAttributes =
     [
         "sAMAccountName", "displayName", "givenName", "sn", "userPrincipalName",
-        "mail", "Custom-External-Email-Address", "telephoneNumber", "mobile",
+        "mail", "mobile",
         "company", "department", "title", "manager",
-        "physicalDeliveryOfficeName",
         "CustomBannerID",
         "extensionAttribute1", "extensionAttribute2", "extensionAttribute3", "extensionAttribute13",
         "userAccountControl", "whenCreated", "whenChanged",
-        "lastLogonTimestamp", "distinguishedName",
+        "lastLogonTimestamp", "distinguishedName", "memberOf",
     ];
 
     private static readonly string[] ExistenceAttributes = ["sAMAccountName"];
+
+    /// <summary>
+    /// Atributos a pedir para la vista de detalle: los estructurales fijos más
+    /// los que estén activos hoy en gov.FieldDefinitions (Catálogo AD) — sin
+    /// duplicados. Así un atributo nuevo creado en el Catálogo se consulta
+    /// automáticamente, sin tocar este archivo ni recompilar.
+    /// </summary>
+    private async Task<string[]> GetDetailAttributesAsync(CancellationToken ct)
+    {
+        var active = await fieldDefinitionsCache.GetActiveAsync(ct);
+        return BaseDetailAttributes
+            .Concat(active.Select(d => d.AdAttributeName))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
 
     // ── User search ────────────────────────────────────────────────────────────
 
@@ -48,17 +68,7 @@ public sealed class AdGateway(
 
         logger.LogDebug("AD search — filter: {Filter}", filter);
 
-        // TEMP LOG — remove once the user search regression is diagnosed.
-        logger.LogInformation(
-            "[DIAG-SEARCH] SearchUsersAsync — query='{Query}', filter={Filter}, baseDn={BaseDn}",
-            q, filter, options.Value.BaseDn);
-
         var result = await RunSearchAsync(q, filter, cap, SearchFetchAttributes, ct);
-
-        // TEMP LOG — remove once the user search regression is diagnosed.
-        logger.LogInformation(
-            "[DIAG-SEARCH] SearchUsersAsync — resultados AD: {Count}, tooManyResults={TooMany}",
-            result.Users.Count, result.TooManyResults);
 
         return result;
     }
@@ -66,18 +76,20 @@ public sealed class AdGateway(
     public async Task<User?> GetUserByAccountAsync(
         string samAccountName, CancellationToken ct = default)
     {
-        var escaped = EscapeLdap(samAccountName);
-        var filter  = $"(&(objectClass=user)(objectCategory=person)(sAMAccountName={escaped}))";
-        var result  = await RunSearchAsync(samAccountName, filter, 1, DetailFetchAttributes, ct);
+        var escaped    = EscapeLdap(samAccountName);
+        var filter     = $"(&(objectClass=user)(objectCategory=person)(sAMAccountName={escaped}))";
+        var attributes = await GetDetailAttributesAsync(ct);
+        var result     = await RunSearchAsync(samAccountName, filter, 1, attributes, ct);
         return result.Users.Count > 0 ? result.Users[0] : null;
     }
 
     public async Task<User?> GetUserByUpnOrMailAsync(
         string upnOrMail, CancellationToken ct = default)
     {
-        var esc    = EscapeLdap(upnOrMail);
-        var filter = $"(&(objectClass=user)(objectCategory=person)(|(userPrincipalName={esc})(mail={esc})))";
-        var result = await RunSearchAsync(upnOrMail, filter, 1, DetailFetchAttributes, ct);
+        var esc        = EscapeLdap(upnOrMail);
+        var filter     = $"(&(objectClass=user)(objectCategory=person)(|(userPrincipalName={esc})(mail={esc})))";
+        var attributes = await GetDetailAttributesAsync(ct);
+        var result     = await RunSearchAsync(upnOrMail, filter, 1, attributes, ct);
         return result.Users.Count > 0 ? result.Users[0] : null;
     }
 
@@ -576,7 +588,7 @@ public sealed class AdGateway(
             {
                 try
                 {
-                    var user = AdUserMapper.Map(entry);
+                    var user = AdUserMapper.Map(entry, DistributionMemberFetchAttributes);
                     members.Add(new AdDistributionListMemberInfo(
                         user.DisplayName, user.Email, user.SamAccountName,
                         user.DistinguishedName ?? string.Empty));
@@ -730,16 +742,10 @@ public sealed class AdGateway(
                 return new AdSearchResult([], TooManyResults: true);
             }
 
-            // TEMP LOG — remove once the user search regression is diagnosed.
-            logger.LogInformation(
-                "[DIAG-SEARCH] RunSearchAsync — query='{Query}', entradas devueltas por LDAP: {Count}, primer DN: {Dn}",
-                rawQuery, response.Entries.Count,
-                response.Entries.Count > 0 ? response.Entries[0].DistinguishedName : "(ninguno)");
-
             var users = new List<User>(response.Entries.Count);
             foreach (SearchResultEntry entry in response.Entries)
             {
-                try   { users.Add(AdUserMapper.Map(entry)); }
+                try   { users.Add(AdUserMapper.Map(entry, attributes)); }
                 catch (Exception ex)
                 {
                     logger.LogWarning(

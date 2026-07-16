@@ -28,7 +28,7 @@ export function useFieldConfig(): UseFieldConfigResult {
         setLoading(false);
       })
       .catch(err => {
-        setError(String(err));
+        setError(err instanceof Error ? err.message : String(err));
         setLoading(false);
       });
   }, [user?.role]);

@@ -11,9 +11,10 @@ public sealed class User
     public string?         CustomBannerID    { get; init; }
 
     // ── Contact ───────────────────────────────────────────────────────────────
+    // Email, Mobile son estructurales (siempre se piden, no gobernados por el
+    // Catálogo AD). ExternalEmail/TelephoneNumber se quitaron de acá — son
+    // atributos administrables por el Catálogo, viven solo en RawAttributes.
     public string?         Email             { get; init; }
-    public string?         ExternalEmail     { get; init; }
-    public string?         TelephoneNumber   { get; init; }
     public string?         Mobile            { get; init; }
 
     // ── Organization ─────────────────────────────────────────────────────────
@@ -21,7 +22,6 @@ public sealed class User
     public string?         Department        { get; init; }
     public string?         JobTitle          { get; init; }
     public string?         Manager           { get; init; }
-    public string?         Office            { get; init; }
 
     // ── Extension attributes ──────────────────────────────────────────────────
     public string?         ExtensionAttribute1  { get; init; }
@@ -30,7 +30,10 @@ public sealed class User
     public string?         ExtensionAttribute13 { get; init; }
 
     // ── Account state ─────────────────────────────────────────────────────────
-    public int?            UserAccountControl { get; init; }
+    // UserAccountControl (el entero crudo) se quitó — es administrable por el
+    // Catálogo (field-account-status), vive solo en RawAttributes. IsEnabled
+    // es estructural: se calcula acá del bit ACCOUNTDISABLE y es la fuente
+    // autoritativa para el badge/botón de habilitar-deshabilitar.
     public bool            IsEnabled          { get; init; }
     public DateTime?       WhenCreated        { get; init; }
     public DateTime?       WhenChanged        { get; init; }

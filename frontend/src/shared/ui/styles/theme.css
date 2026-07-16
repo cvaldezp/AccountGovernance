@@ -483,3 +483,77 @@ textarea.ds-input__field { resize: vertical; min-height: 72px; }
 .ds-alert--error   { background: var(--ds-danger-light);  color: var(--ds-danger-dark);  border-color: var(--ds-danger-border);  }
 .ds-alert--warning { background: var(--ds-warning-light); color: var(--ds-warning-dark); border-color: var(--ds-warning-border); }
 .ds-alert--info    { background: var(--ds-info-light);    color: var(--ds-info-dark);    border-color: var(--ds-info-border);    }
+
+/* ── 10. AppModal (.ds-modal) ───────────────────────────────── */
+.ds-modal__overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.48); /* --ds-neutral-900 @ 48% */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1000;
+  animation: ds-fade-in 0.15s ease both;
+}
+
+.ds-modal__panel {
+  background: var(--ds-neutral-0);
+  border-radius: var(--ds-radius-2xl);
+  box-shadow: var(--ds-shadow-card);
+  width: 100%;
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ds-modal__panel--sm { max-width: 420px; }
+.ds-modal__panel--md { max-width: 640px; }
+.ds-modal__panel--lg { max-width: 900px; }
+
+.ds-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--ds-neutral-100);
+}
+
+.ds-modal__title {
+  font-family: var(--ds-font-heading);
+  font-size: var(--ds-text-xl);
+  color: var(--ds-neutral-900);
+  margin: 0;
+}
+
+.ds-modal__close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--ds-neutral-400);
+  padding: 4px 8px;
+  border-radius: var(--ds-radius-md);
+}
+
+.ds-modal__close:hover:not(:disabled) {
+  background: var(--ds-neutral-100);
+  color: var(--ds-neutral-700);
+}
+
+.ds-modal__close:disabled { opacity: 0.48; cursor: not-allowed; }
+
+.ds-modal__body {
+  padding: 22px;
+  overflow-y: auto;
+}
+
+.ds-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 22px;
+  border-top: 1px solid var(--ds-neutral-100);
+}

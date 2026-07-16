@@ -9,10 +9,7 @@ namespace AccountGovernance.Api.Controllers;
 [ApiController]
 [Route("users")]
 [Produces("application/json")]
-public sealed class UsersController(
-    IUserService             userService,
-    ILogger<UsersController> logger
-) : ControllerBase
+public sealed class UsersController(IUserService userService) : ControllerBase
 {
     /// <summary>Search users by Banner code, institutional email, or sAMAccountName (min 3 chars).</summary>
     [HttpGet("search")]
@@ -20,15 +17,7 @@ public sealed class UsersController(
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Search([FromQuery] string q, CancellationToken ct)
     {
-        // TEMP LOG — remove once the user search regression is diagnosed.
-        logger.LogInformation("[DIAG-SEARCH] UsersController.Search recibida — q='{Q}'", q);
-
         var result = await userService.SearchAsync(q, ct);
-
-        // TEMP LOG — remove once the user search regression is diagnosed.
-        logger.LogInformation(
-            "[DIAG-SEARCH] UsersController.Search resultado — success={Success}, count={Count}, error={Error}",
-            result.IsSuccess, result.Data?.Count ?? 0, result.Error);
 
         return result.IsSuccess
             ? Ok(result.Data)

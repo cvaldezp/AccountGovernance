@@ -14,31 +14,53 @@ const USERS_URL = '/api/users';
 // activates when explicitly opted into via this flag (e.g. local dev without AD access).
 const MOCK_MODE = env['VITE_USE_MOCK_DATA'] === 'true';
 
-// Shape of the real API response (GET /api/users/{samAccountName})
+// Shape of the real API response (GET /api/users/{samAccountName}). Solo
+// información estructural como propiedades nombradas — cualquier atributo
+// administrable por el Catálogo AD (Oficina, Teléfono, Email Externo, Estado
+// de Cuenta técnico, y cualquier atributo futuro) vive únicamente en
+// `attributes`, indexado por su AdAttributeName real.
 interface ApiUserDetailDto {
-  samAccountName:              string;
-  displayName:                 string;
-  givenName?:                  string | null;
-  sn?:                         string | null;
-  mail?:                       string | null;
-  userPrincipalName?:          string | null;
-  company?:                    string | null;
-  department?:                 string | null;
-  title?:                      string | null;
-  manager?:                    string | null;
-  physicalDeliveryOfficeName?: string | null;
-  telephoneNumber?:            string | null;
-  mobile?:                     string | null;
-  externalEmail?:              string | null;
-  extensionAttribute1?:        string | null;
-  extensionAttribute2?:        string | null;
-  extensionAttribute3?:        string | null;
-  userAccountControl?:         number | null;
-  isEnabled:                   boolean;
-  whenCreated?:                string | null;
-  whenChanged?:                string | null;
-  lastLogon?:                  string | null;
-  distinguishedName?:          string | null;
+  samAccountName:       string;
+  displayName:          string;
+  givenName?:           string | null;
+  sn?:                  string | null;
+  mail?:                string | null;
+  userPrincipalName?:   string | null;
+  company?:             string | null;
+  department?:          string | null;
+  title?:               string | null;
+  manager?:             string | null;
+  mobile?:              string | null;
+  extensionAttribute1?: string | null;
+  extensionAttribute2?: string | null;
+  extensionAttribute3?: string | null;
+  isEnabled:            boolean;
+  whenCreated?:         string | null;
+  whenChanged?:         string | null;
+  lastLogon?:           string | null;
+  distinguishedName?:   string | null;
+  /** Todo atributo AD solicitado (base + activos del Catálogo), indexado por
+   *  su AdAttributeName real exacto — fuente única para atributos administrables. */
+  attributes:           Record<string, string | null>;
+}
+
+/**
+ * Único punto de mapeo DTO → atributos AD. Parte de `dto.attributes` (genérico,
+ * cubre cualquier atributo presente o futuro sin tocar este archivo de nuevo)
+ * y solo sobre-escribe el estado de cuenta con su representación amigable —
+ * nunca se interpreta el valor técnico crudo de userAccountControl como string.
+ *
+ * 'AccountStatus' se mantiene en paralelo a 'userAccountControl' (mismo valor
+ * amigable) porque varios archivos ajenos al lookup dinámico dependen de esa
+ * clave fija — ver UserAttributes en types/index.ts.
+ */
+function mapApiDetailToAdAttributes(dto: ApiUserDetailDto): UserAttributes {
+  const accountStatus = dto.isEnabled ? 'Enabled' : 'Disabled';
+  return {
+    ...(dto.attributes as UserAttributes),
+    userAccountControl: accountStatus,
+    AccountStatus:       accountStatus,
+  };
 }
 
 function mapApiDetailToUser(dto: ApiUserDetailDto): User {
@@ -46,15 +68,10 @@ function mapApiDetailToUser(dto: ApiUserDetailDto): User {
     id:          dto.samAccountName,
     username:    dto.samAccountName,
     displayName: dto.displayName,
-    email:       dto.mail                   ?? '',
-    department:  dto.department             ?? '',
-    jobTitle:    dto.title                  ?? '',
-    attributes: {
-      'Custom-External-Email-Address': dto.externalEmail              ?? '',
-      Oficina:                         dto.physicalDeliveryOfficeName ?? '',
-      AccountStatus:                   dto.isEnabled ? 'Enabled' : 'Disabled',
-      telephoneNumber:                 dto.telephoneNumber            ?? '',
-    } as UserAttributes,
+    email:       dto.mail       ?? '',
+    department:  dto.department ?? '',
+    jobTitle:    dto.title      ?? '',
+    attributes:  mapApiDetailToAdAttributes(dto),
   };
 }
 
@@ -124,7 +141,7 @@ export class UserProfileAgent {
     addAuditEntry({
       performedBy: operatorName,
       roleName:    role,
-      actionType:  'UPDATE_FIELD',
+      actionType:  'UpdateField',
       fieldKey:    field,
       oldValue:    result.data?.oldValue,
       newValue:    result.data?.newValue,

@@ -20,11 +20,20 @@ export interface Role {
   permissions: FieldPermission[];
 }
 
+/**
+ * Bolsa de atributos AD por usuario, indexada por AdAttributeName real
+ * (fuente de verdad: gov.FieldDefinitions) — no por nombres traducidos/legados.
+ * Índice abierto a propósito: un atributo nuevo creado en el Catálogo AD debe
+ * poder guardarse/leerse aquí sin tocar este tipo.
+ *
+ * 'AccountStatus' se mantiene como alias fijo junto a 'userAccountControl'
+ * (mismo valor) porque varios archivos ajenos al lookup dinámico
+ * (EnableAccountSkill, DisableAccountSkill, SearchUserPage, DashboardPage)
+ * acceden a `.AccountStatus` directo, no vía FieldDefinition.
+ */
 export interface UserAttributes {
-  'Custom-External-Email-Address': string;
-  Oficina: string;
-  AccountStatus: 'Enabled' | 'Disabled' | 'Locked';
-  telephoneNumber?: string;
+  [adAttributeName: string]: string | undefined;
+  AccountStatus?: 'Enabled' | 'Disabled' | 'Locked';
 }
 
 export interface User {

@@ -7,4 +7,9 @@ public enum AuditActionType
     DisableAccount,
     DistributionListMemberAdded,
     DistributionListMemberRemoved,
+    CreateAttribute,
+    UpdateAttribute,
+    ActivateAttribute,
+    DeactivateAttribute,
+    UpdateRolePermission,
 }
