@@ -776,3 +776,173 @@ IF NOT EXISTS (SELECT 1 FROM gov.SystemRoleGroups WHERE GroupDn = 'CN=account-sd
     SELECT Id, 'account-sd', 'CN=account-sd,OU=SECURITY,OU=GROUPS,OU=Cumbaya,DC=usfq,DC=edu,DC=ec', 1
     FROM gov.SystemRoles WHERE RoleKey = 'DragonHelp';
 GO
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Modelo de Scope (Ámbito Administrativo) — Incremento 1.
+-- Solo modelo de datos + CRUD: estas tablas NO restringen ninguna operación
+-- real todavía. El enforcement llega en incrementos posteriores, una vez que
+-- existan RoleScopeAssignment/RoleScopeFieldPermission y el scope-check.
+-- Sin seed de datos reales — los BaseDn reales se cargan cuando el equipo de
+-- infraestructura confirme el inventario de dominios/ConnectionProfiles
+-- (Incremento 0), para no activar un ámbito con un DN inventado.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.tables t
+    JOIN sys.schemas s ON t.schema_id = s.schema_id
+    WHERE t.name = 'AdministrativeScopes' AND s.name = 'gov'
+)
+BEGIN
+    CREATE TABLE gov.AdministrativeScopes (
+        Id                INT           NOT NULL IDENTITY(1,1) PRIMARY KEY,
+        ScopeKey          NVARCHAR(100) NOT NULL,
+        Name              NVARCHAR(200) NOT NULL,
+        Description       NVARCHAR(500) NULL,
+        Category          NVARCHAR(50)  NULL,
+        BaseDn            NVARCHAR(500) NOT NULL,
+        ConnectionProfile NVARCHAR(100) NOT NULL DEFAULT ('default'),
+        IsActive          BIT           NOT NULL DEFAULT 0,
+        Priority          INT           NOT NULL DEFAULT 100,
+        CreatedBy         NVARCHAR(200) NULL,
+        UpdatedBy         NVARCHAR(200) NULL,
+        CreatedAt         DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+        UpdatedAt         DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+        CONSTRAINT UQ_Gov_AdministrativeScopes_ScopeKey UNIQUE (ScopeKey)
+    );
+
+    CREATE INDEX IX_Gov_AdministrativeScopes_Priority ON gov.AdministrativeScopes (Priority);
+    CREATE INDEX IX_Gov_AdministrativeScopes_Active   ON gov.AdministrativeScopes (IsActive);
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.tables t
+    JOIN sys.schemas s ON t.schema_id = s.schema_id
+    WHERE t.name = 'AdministrativeScopeFilters' AND s.name = 'gov'
+)
+BEGIN
+    CREATE TABLE gov.AdministrativeScopeFilters (
+        Id                     INT           NOT NULL IDENTITY(1,1) PRIMARY KEY,
+        AdministrativeScopeId  INT           NOT NULL,
+        FilterType             NVARCHAR(50)  NOT NULL,
+        AttributeName          NVARCHAR(200) NOT NULL,
+        Operator               NVARCHAR(20)  NOT NULL,
+        Value                  NVARCHAR(500) NULL,
+        IsActive               BIT           NOT NULL DEFAULT 1,
+        CreatedAt              DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+        UpdatedAt              DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+        UpdatedBy              NVARCHAR(200) NULL,
+        CONSTRAINT FK_Gov_AdministrativeScopeFilters_Scope FOREIGN KEY (AdministrativeScopeId)
+            REFERENCES gov.AdministrativeScopes(Id),
+        CONSTRAINT CK_Gov_AdministrativeScopeFilters_Operator
+            CHECK (Operator IN ('Equals', 'NotEquals', 'In', 'Exists'))
+    );
+
+    CREATE INDEX IX_Gov_AdministrativeScopeFilters_ScopeId ON gov.AdministrativeScopeFilters (AdministrativeScopeId);
+    CREATE INDEX IX_Gov_AdministrativeScopeFilters_Active  ON gov.AdministrativeScopeFilters (IsActive);
+END
+GO
+
+-- Unicidad lógica entre filtros ACTIVOS de un mismo ámbito — defensa en
+-- profundidad en SQL Server, complementaria al chequeo de la aplicación
+-- (AdministrativeScopeService.CheckDuplicateFilterAsync), que es quien da el
+-- mensaje entendible al usuario. Este índice es la última línea de defensa
+-- ante una condición de carrera (dos requests concurrentes pasando el chequeo
+-- de la aplicación al mismo tiempo).
+--
+-- Decisiones de diseño, explícitas para no introducir un constraint incorrecto:
+-- 1. Índice ÚNICO FILTRADO (WHERE IsActive = 1): SQL Server no soporta un
+--    UNIQUE CONSTRAINT condicional — un índice filtrado sí. Sin el filtro,
+--    dos filtros equivalentes donde uno está inactivo (ej. se desactivó uno y
+--    luego se creó un reemplazo activo) romperían la unicidad exigida, que es
+--    solo entre ACTIVOS.
+-- 2. Columnas computadas PERSISTED normalizadas (no las columnas crudas):
+--    AttributeName/Value se comparan sin distinguir mayúsculas ni espacios en
+--    la aplicación — el índice debe usar la misma normalización o divergiría
+--    del chequeo de la aplicación. ISNULL(Value,'') convierte explícitamente
+--    NULL (usado por el operador Exists) en cadena vacía, para no depender de
+--    la semántica particular de SQL Server sobre NULLs en índices únicos.
+-- 3. LIMITACIÓN CONOCIDA, documentada a propósito (no se resuelve en este
+--    incremento): el operador In no se normaliza a nivel SQL. La aplicación
+--    (AdministrativeScopeService.Normalize) sí ordena y compara los tokens
+--    separados por coma sin importar el orden en que se escribieron — pero
+--    ValueNormalized guarda el texto tal cual, así que dos filtros In
+--    concurrentes con el mismo conjunto de valores en distinto orden (ej.
+--    "A,B" y "B,A") NO son detectados como duplicados por este índice.
+--    Resolverlo en SQL exigiría una función escalar con SCHEMABINDING solo
+--    para ese caso — complejidad real para un beneficio marginal que la
+--    aplicación ya cubre. Mejora futura evaluada y pospuesta a propósito:
+--    normalizar (ordenar) el Value de los filtros In ANTES de persistirlo
+--    (en la propia aplicación, al guardar), para que el valor almacenado
+--    quede siempre en un orden canónico y el índice SQL empiece a detectar
+--    también este caso sin cambiar su definición.
+IF COL_LENGTH('gov.AdministrativeScopeFilters', 'AttributeNameNormalized') IS NULL
+BEGIN
+    ALTER TABLE gov.AdministrativeScopeFilters
+        ADD AttributeNameNormalized AS UPPER(LTRIM(RTRIM(AttributeName))) PERSISTED;
+END
+GO
+
+IF COL_LENGTH('gov.AdministrativeScopeFilters', 'ValueNormalized') IS NULL
+BEGIN
+    ALTER TABLE gov.AdministrativeScopeFilters
+        ADD ValueNormalized AS UPPER(LTRIM(RTRIM(ISNULL(Value, '')))) PERSISTED;
+END
+GO
+
+-- Diagnóstico previo obligatorio: el índice único filtrado solo se crea si NO
+-- hay ya duplicados activos con la misma representación normalizada — mismo
+-- patrón ya usado arriba para UQ_Gov_FieldDefinitions_AdAttributeName. Si los
+-- hay: PRINT explicativo + SELECT de los filtros en conflicto (con sus Id,
+-- para que el DBA pueda inactivar/editar uno de cada grupo), se omite
+-- ÚNICAMENTE la creación del índice, y el resto del script sigue normal — no
+-- se elimina ni modifica ningún dato automáticamente. Recomendado: volver a
+-- ejecutar este bloque después de resolver los duplicados, para que el
+-- índice quede creado.
+IF EXISTS (
+    SELECT AdministrativeScopeId, AttributeNameNormalized, Operator, ValueNormalized
+    FROM   gov.AdministrativeScopeFilters
+    WHERE  IsActive = 1
+    GROUP BY AdministrativeScopeId, AttributeNameNormalized, Operator, ValueNormalized
+    HAVING COUNT(*) > 1
+)
+BEGIN
+    PRINT 'ADVERTENCIA: no se creó UQ_Gov_AdministrativeScopeFilters_Active porque existen filtros ACTIVOS duplicados (misma representación normalizada) en gov.AdministrativeScopeFilters. Revisa el SELECT de duplicados a continuación, resuélvelos manualmente (inactiva o edita uno de cada grupo) y vuelve a ejecutar este bloque para que el índice se cree.';
+
+    SELECT f.Id, s.ScopeKey, f.AttributeName, f.AttributeNameNormalized, f.Operator, f.Value, f.ValueNormalized
+    FROM   gov.AdministrativeScopeFilters f
+    JOIN   gov.AdministrativeScopes s ON s.Id = f.AdministrativeScopeId
+    WHERE  f.IsActive = 1
+      AND  EXISTS (
+          SELECT 1 FROM gov.AdministrativeScopeFilters f2
+          WHERE  f2.IsActive = 1
+            AND  f2.Id <> f.Id
+            AND  f2.AdministrativeScopeId  = f.AdministrativeScopeId
+            AND  f2.AttributeNameNormalized = f.AttributeNameNormalized
+            AND  f2.Operator                = f.Operator
+            AND  f2.ValueNormalized         = f.ValueNormalized
+      )
+    ORDER BY s.ScopeKey, f.AttributeNameNormalized, f.Id;
+END
+ELSE IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes
+    WHERE name = 'UQ_Gov_AdministrativeScopeFilters_Active'
+      AND object_id = OBJECT_ID('gov.AdministrativeScopeFilters')
+)
+BEGIN
+    CREATE UNIQUE INDEX UQ_Gov_AdministrativeScopeFilters_Active
+        ON gov.AdministrativeScopeFilters (AdministrativeScopeId, AttributeNameNormalized, Operator, ValueNormalized)
+        WHERE IsActive = 1;
+END
+GO
+
+-- Verificación (para que un DBA confirme manualmente el resultado):
+SELECT COUNT(*) AS AdministrativeScopes_Count        FROM gov.AdministrativeScopes;
+SELECT COUNT(*) AS AdministrativeScopeFilters_Count   FROM gov.AdministrativeScopeFilters;
+
+SELECT name, filter_definition
+FROM   sys.indexes
+WHERE  object_id = OBJECT_ID('gov.AdministrativeScopeFilters')
+  AND  is_unique = 1
+  AND  has_filter = 1;
+GO

@@ -36,6 +36,7 @@ public static class DependencyInjection
         services.AddScoped<IExpirationConfigRepository,  ExpirationConfigRepository>();
         services.AddScoped<ISystemRoleRepository,        SystemRoleRepository>();
         services.AddScoped<ISystemAuthorizationService,  SystemAuthorizationService>();
+        services.AddScoped<IAdministrativeScopeRepository, AdministrativeScopeRepository>();
 
         return services;
     }

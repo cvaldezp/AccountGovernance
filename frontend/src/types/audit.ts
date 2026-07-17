@@ -12,7 +12,14 @@ export type AuditActionType =
   | 'UpdateAttribute'
   | 'ActivateAttribute'
   | 'DeactivateAttribute'
-  | 'UpdateRolePermission';
+  | 'UpdateRolePermission'
+  | 'ScopeCreated'
+  | 'ScopeUpdated'
+  | 'ScopeActivated'
+  | 'ScopeDeactivated'
+  | 'ScopeFilterCreated'
+  | 'ScopeFilterUpdated'
+  | 'ScopeFilterDeleted';
 
 export interface AuditEntry {
   id:          string;

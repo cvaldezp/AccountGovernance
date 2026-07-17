@@ -12,4 +12,11 @@ public enum AuditActionType
     ActivateAttribute,
     DeactivateAttribute,
     UpdateRolePermission,
+    ScopeCreated,
+    ScopeUpdated,
+    ScopeActivated,
+    ScopeDeactivated,
+    ScopeFilterCreated,
+    ScopeFilterUpdated,
+    ScopeFilterDeleted,
 }

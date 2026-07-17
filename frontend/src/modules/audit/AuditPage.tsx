@@ -18,6 +18,13 @@ const ACTION_LABELS: Record<AuditActionType, string> = {
   ActivateAttribute:             'Atributo activado',
   DeactivateAttribute:           'Atributo inactivado',
   UpdateRolePermission:          'Permiso de rol editado',
+  ScopeCreated:                  'Ámbito creado',
+  ScopeUpdated:                  'Ámbito editado',
+  ScopeActivated:                'Ámbito activado',
+  ScopeDeactivated:              'Ámbito inactivado',
+  ScopeFilterCreated:            'Filtro de ámbito creado',
+  ScopeFilterUpdated:            'Filtro de ámbito editado',
+  ScopeFilterDeleted:            'Filtro de ámbito eliminado',
 };
 
 const ACTION_VARIANT: Record<AuditActionType, 'info' | 'success' | 'warning'> = {
@@ -31,6 +38,13 @@ const ACTION_VARIANT: Record<AuditActionType, 'info' | 'success' | 'warning'> = 
   ActivateAttribute:             'success',
   DeactivateAttribute:           'warning',
   UpdateRolePermission:          'info',
+  ScopeCreated:                  'success',
+  ScopeUpdated:                  'info',
+  ScopeActivated:                'success',
+  ScopeDeactivated:              'warning',
+  ScopeFilterCreated:            'success',
+  ScopeFilterUpdated:            'info',
+  ScopeFilterDeleted:            'warning',
 };
 
 const DOMAIN_COLOR: Record<string, string> = {
