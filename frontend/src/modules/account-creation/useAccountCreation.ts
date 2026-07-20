@@ -6,6 +6,8 @@ import type {
 } from './types';
 import { computePreview } from './accountTypes';
 import { accountCreationApi } from './accountCreationApi';
+import { accountNamingPolicyApi } from '../../shared/account-naming/accountNamingPolicyApi';
+import type { AccountNamingPolicy } from '../../shared/account-naming/types';
 
 const BASE_FORM: AccountFormData = {
   accountName:      '',
@@ -57,6 +59,8 @@ export function useAccountCreation() {
   const [form,             setForm]             = useState<AccountFormData>(BASE_FORM);
   const [emailValidation,  setEmailValidation]  = useState<RecoveryEmailValidation>(IDLE_VALIDATION);
   const [expirationConfig, setExpirationConfig] = useState<ExpirationConfig | null>(null);
+  const [namingPolicy,     setNamingPolicy]     = useState<AccountNamingPolicy | null>(null);
+  const [namingPolicyError, setNamingPolicyError] = useState<string | null>(null);
 
   // Creation flow
   const [creationStep,      setCreationStep]      = useState<CreationStep>('form');
@@ -67,9 +71,17 @@ export function useAccountCreation() {
     Promise.all([
       accountCreationApi.getAccountTypes(),
       accountCreationApi.getExpirationConfig(),
-    ]).then(([types, config]) => {
+      accountNamingPolicyApi.get().catch(err => {
+        // Sin fallback silencioso: si la política no carga, el formulario debe
+        // saberlo explícitamente (bloquea el envío) en vez de asumir una regla
+        // inventada localmente — ver isFormReady en CreateAccountPage.
+        setNamingPolicyError(err instanceof Error ? err.message : String(err));
+        return null;
+      }),
+    ]).then(([types, config, policy]) => {
       setAccountTypes(types);
       setExpirationConfig(config);
+      setNamingPolicy(policy);
     }).finally(() => setTypesLoading(false));
   }, []);
 
@@ -86,10 +98,10 @@ export function useAccountCreation() {
   const preview = useMemo<AccountPreviewData | null>(() => {
     if (!selectedType || !typeInfo) return null;
     if (selectedType === 'PRIVILEGED' && !subTypeInfo) return null;
-    const base = computePreview(selectedType, form, typeInfo, subTypeInfo);
+    const base = computePreview(selectedType, form, typeInfo, namingPolicy, subTypeInfo);
 
     const sam  = base.sAMAccountName;
-    const mail = sam ? `${sam}@usfq.edu.ec` : null;
+    const mail = sam && base.accountNameValid ? `${sam}@usfq.edu.ec` : null;
 
     return {
       ...base,
@@ -98,7 +110,7 @@ export function useAccountCreation() {
       managerDn:          emailValidation.managerDn       ?? null,
       managerDisplayName: emailValidation.userDisplayName ?? null,
     };
-  }, [selectedType, form, typeInfo, subTypeInfo, emailValidation]);
+  }, [selectedType, form, typeInfo, subTypeInfo, emailValidation, namingPolicy]);
 
   function updateField<K extends keyof AccountFormData>(key: K, value: AccountFormData[K]) {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -219,6 +231,8 @@ export function useAccountCreation() {
     preview,
     emailValidation,
     expirationConfig,
+    namingPolicy,
+    namingPolicyError,
     creationStep,
     validationResult,
     createResult,

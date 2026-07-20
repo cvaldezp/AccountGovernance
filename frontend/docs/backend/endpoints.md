@@ -151,3 +151,50 @@ Retorna entradas de auditoría con filtros opcionales.
 
 ### `GET /api/dashboard/summary`
 Retorna métricas de actividad (usuarios gestionados, cambios recientes, etc.).
+
+---
+
+## Política de nombres de cuenta
+
+Única para todo el sistema de creación de cuentas: todos los tipos actuales
+(Genéricas, Partner, Servicio, Extensión, Privilegiadas) y cualquier tipo
+futuro que utilice el flujo centralizado de `AccountCreationService`.
+Reemplaza la limpieza silenciosa de caracteres que existía antes
+(`AccountCreationService.Ascii()` / `accountTypes.ts::normalizeToAscii()`,
+ambas eliminadas): un nombre que no cumple la política se **rechaza con un
+mensaje claro**, nunca se modifica sin avisar. Ver `docs/account-naming-policy.md`
+para el detalle completo del algoritmo de validación y los casos de prueba.
+
+**Sin pantalla administrativa todavía**: la política se edita hoy únicamente
+vía `PUT /api/account-naming-policy` desde Swagger/Postman con una cuenta
+`SystemAdmin` — no existe una sección en el portal para esto. Ver
+`docs/account-naming-policy.md` § "Administración de la política".
+
+### `GET /api/account-naming-policy`
+Devuelve la política vigente. Cualquier usuario autenticado puede leerla — la
+necesita el formulario de creación de cuentas para validar en vivo.
+
+```json
+{
+  "allowedChars": "abcdefghijklmnopqrstuvwxyz0123456789-._",
+  "minLength": 3,
+  "maxLength": 20,
+  "disallowLeadingTrailingSpecialChars": true,
+  "disallowConsecutiveSpecialChars": true,
+  "updatedAt": "2026-07-20T00:00:00Z",
+  "updatedBy": null
+}
+```
+
+### `PUT /api/account-naming-policy`
+Edita la política. **SystemAdmin únicamente** (403 para cualquier otro rol).
+Toda actualización exitosa se audita en `gov.AuditEntries`
+(`ActionType=NamingPolicyUpdated`) con el valor anterior y el nuevo.
+
+**Body:** mismo shape que la respuesta de `GET`, sin `updatedAt`/`updatedBy`.
+
+**Validaciones (400 si fallan):** `AllowedChars` no vacío, sin mayúsculas, sin
+espacios, sin caracteres de control, subconjunto del superconjunto seguro
+(`abcdefghijklmnopqrstuvwxyz0123456789-._`), sin caracteres duplicados, con al
+menos un carácter alfanumérico; `MinLength ≥ 1`; `MaxLength ≥ MinLength`;
+`MaxLength ≤ 20` (límite real de `sAMAccountName` en Active Directory).

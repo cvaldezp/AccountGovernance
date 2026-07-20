@@ -19,4 +19,5 @@ public enum AuditActionType
     ScopeFilterCreated,
     ScopeFilterUpdated,
     ScopeFilterDeleted,
+    NamingPolicyUpdated,
 }

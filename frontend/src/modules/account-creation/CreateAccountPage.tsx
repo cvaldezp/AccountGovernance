@@ -6,6 +6,7 @@ import { AccountPreview } from './AccountPreview';
 import { ValidationSummary } from './ValidationSummary';
 import { CreateResultView } from './CreateResultView';
 import { useAccountCreation } from './useAccountCreation';
+import { buildPolicyHint } from '../../shared/account-naming/normalizeAndValidateAccountName';
 
 export function CreateAccountPage() {
   const {
@@ -19,6 +20,7 @@ export function CreateAccountPage() {
     preview,
     emailValidation,
     expirationConfig,
+    namingPolicy,
     creationStep,
     validationResult,
     createResult,
@@ -134,8 +136,14 @@ export function CreateAccountPage() {
   }
 
   // ── Step 3: form + preview (default) ─────────────────────────────────────
+  const accountNameHint  = buildPolicyHint(namingPolicy, subTypeInfo?.samPrefix);
+  const accountNameError = form.accountName.trim().length > 0 && preview && !preview.accountNameValid
+    ? preview.accountNameError ?? null
+    : null;
+
   const isFormReady =
     form.accountName.trim().length > 0 &&
+    preview?.accountNameValid === true &&
     form.firstName.trim().length > 0 &&
     form.apellidos.trim().length > 0 &&
     form.description.trim().length > 0 &&
@@ -167,6 +175,8 @@ export function CreateAccountPage() {
             form={form}
             emailValidation={emailValidation}
             expirationConfig={expirationConfig}
+            accountNameHint={accountNameHint}
+            accountNameError={accountNameError}
             onFieldChange={updateField}
             onValidateEmail={validateRecoveryEmail}
             onGenPassword={generatePassword}

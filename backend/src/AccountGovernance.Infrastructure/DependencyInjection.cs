@@ -37,6 +37,7 @@ public static class DependencyInjection
         services.AddScoped<ISystemRoleRepository,        SystemRoleRepository>();
         services.AddScoped<ISystemAuthorizationService,  SystemAuthorizationService>();
         services.AddScoped<IAdministrativeScopeRepository, AdministrativeScopeRepository>();
+        services.AddScoped<IAccountNamingPolicyRepository, AccountNamingPolicyRepository>();
 
         return services;
     }

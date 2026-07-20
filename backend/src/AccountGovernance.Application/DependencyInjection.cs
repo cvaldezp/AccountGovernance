@@ -19,6 +19,7 @@ public static class DependencyInjection
         services.AddScoped<ISystemRoleService,               SystemRoleService>();
         services.AddScoped<IDistributionListService,         DistributionListService>();
         services.AddScoped<IAdministrativeScopeService,      AdministrativeScopeService>();
+        services.AddScoped<IAccountNamingPolicyService,      AccountNamingPolicyService>();
         return services;
     }
 }

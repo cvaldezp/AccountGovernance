@@ -1,5 +1,69 @@
 # Changelog
 
+## [2026-07-20] — Incremento 2.1: política de nombres de cuenta configurable
+
+### Agregado
+
+**Backend**
+- `gov.AccountNamingPolicy` — tabla singleton física (`CHECK (Id=1)` + PK, sin
+  depender de convención), única política de nombres para todo el sistema de
+  creación de cuentas.
+- `GET/PUT /api/account-naming-policy` — lectura para cualquier autenticado,
+  edición exclusiva de `SystemAdmin`, auditada en `gov.AuditEntries`
+  (`AuditActionType.NamingPolicyUpdated`).
+- `AccountNamingPolicyService.ValidateAccountNameAsync` — única fuente de
+  normalización (trim + minúsculas culturalmente estables, `ToLowerInvariant`)
+  y validación (charset, longitud, extremos, consecutivos, longitud efectiva
+  de `sAMAccountName` considerando el prefijo del tipo/subtipo, tope duro de
+  20 caracteres) — sin regex en ningún punto del motor de validación.
+- Validación de la propia configuración al editar (`PUT`): rechaza
+  `AllowedChars` vacío, con mayúsculas, espacios, caracteres de control, fuera
+  del superconjunto seguro, duplicados, o sin ningún alfanumérico; `MinLength`,
+  `MaxLength` y su relación mutua; `MaxLength > 20`.
+
+**Frontend**
+- `shared/account-naming/` — módulo reutilizable por cualquier tipo de cuenta
+  presente o futuro: cliente API, y `normalizeAndValidateAccountName()` que
+  replica el mismo algoritmo del backend (sin regex) para dar feedback en vivo
+  mientras el técnico escribe.
+- Campo "Cuenta" del formulario de creación: error visible y hint dinámico
+  construido desde la política real (nunca texto hardcodeado); el botón
+  "Crear cuenta" queda deshabilitado mientras el nombre no sea válido.
+
+### Corregido
+
+- El sistema eliminaba silenciosamente caracteres no soportados del campo
+  "Cuenta" (`AccountCreationService.Ascii()` / `accountTypes.ts::normalizeToAscii()`,
+  ambas eliminadas) — la vista previa nunca coincidía con lo realmente
+  almacenado en AD (ej. `sales-force` se guardaba como `salesforce` sin
+  avisar). Ahora: si el nombre cumple la política, se usa exactamente igual en
+  `sAMAccountName`/`UserPrincipalName`/`mail`; si no, se rechaza con un
+  mensaje claro — nunca se modifica sin que el usuario lo sepa.
+
+### Pruebas
+
+Ver `docs/account-naming-policy.md` — 16 casos de nombre + 9 casos de
+configuración inválida ejecutados contra el código real (backend vía harness
+temporal referenciando `AccountGovernance.Application`; frontend vía Node 24
+con type-stripping nativo sobre el módulo TypeScript real, sin reimplementar
+la lógica). Los 2 casos que requieren infraestructura viva (conflicto de AD,
+gate de autorización HTTP) se verificaron por lectura de código, no ejecución.
+Comparación objetiva de ESLint contra el commit base (`4a2f107`, vía git
+worktree aislado) confirmó cero errores nuevos introducidos.
+
+**Pendiente — verificación operacional en Development (no es deuda de
+código, es una tarea del propietario del ambiente)**: aplicar `schema.sql` y
+validar el singleton físico, y ejercitar `GET`/`PUT /api/account-naming-policy`
+con una cuenta `SystemAdmin` real, confirmando la entrada en `gov.AuditEntries`.
+Procedimiento reproducible completo en `docs/account-naming-policy.md`
+§ "Validación operacional pendiente".
+
+**Sin pantalla administrativa todavía**: la política se edita hoy solo vía
+`PUT` desde Swagger/Postman. Propuesto (no implementado, pendiente de
+autorización) como Incremento 2.1.1.
+
+---
+
 ## [2026-07-16] — Hito v1: integración real con Active Directory
 
 ### Agregado

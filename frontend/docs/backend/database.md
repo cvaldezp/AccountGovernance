@@ -64,6 +64,29 @@ INDEX IX_Gov_Audit_Operator   (OperatorSamAccountName)
 INDEX IX_Gov_Audit_Target     (TargetSamAccountName)
 ```
 
+### `gov.AccountNamingPolicy`
+
+Política de nombres de cuenta — fila única para todo el sistema. Singleton
+**físico**, no por convención: `CHECK (Id = 1)` + `PRIMARY KEY (Id)` hacen
+imposible que exista una segunda fila. El seed la crea una sola vez; a partir
+de ahí toda edición es un `UPDATE ... WHERE Id = 1` puro (la fila siempre
+existe), sin ningún branch `IF EXISTS`/`INSERT` que pueda introducir una
+carrera.
+
+```sql
+Id                                    INT PRIMARY KEY CHECK (Id = 1)
+AllowedChars                         NVARCHAR(100) NOT NULL   -- enumeración literal, no un patrón/regex
+MinLength                            INT NOT NULL
+MaxLength                            INT NOT NULL             -- ≤ 20, límite real de sAMAccountName en AD
+DisallowLeadingTrailingSpecialChars  BIT NOT NULL DEFAULT 1
+DisallowConsecutiveSpecialChars      BIT NOT NULL DEFAULT 1
+UpdatedAt                            DATETIME2 NOT NULL DEFAULT GETUTCDATE()
+UpdatedBy                            NVARCHAR(200) NULL
+```
+
+Seed por defecto: `AllowedChars='abcdefghijklmnopqrstuvwxyz0123456789-._'`,
+`MinLength=3`, `MaxLength=20`, ambos booleanos en `1`.
+
 ## IIS / App Pool
 
 - La identidad del App Pool debe tener `db_datareader + db_datawriter + EXECUTE` en schema `gov`

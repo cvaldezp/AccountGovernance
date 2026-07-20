@@ -89,6 +89,9 @@ export interface AccountPreviewData {
   expirationMode?:      ExpirationMode | null;
   expirationDate?:      string | null;   // 'YYYY-MM-DD'
   accountExpiresRaw?:   number | null;
+  // naming policy — feedback en vivo, calculado client-side por computePreview()
+  accountNameValid?:    boolean;
+  accountNameError?:    string | null;
 }
 
 export interface ExpirationConfig {

@@ -9,6 +9,8 @@ interface Props {
   form:             AccountFormData;
   emailValidation:  RecoveryEmailValidation;
   expirationConfig: ExpirationConfig | null;
+  accountNameHint:  string;
+  accountNameError: string | null;
   onFieldChange:    <K extends keyof AccountFormData>(key: K, value: AccountFormData[K]) => void;
   onValidateEmail:  () => void;
   onGenPassword:    () => void;
@@ -34,6 +36,8 @@ export function DynamicAccountForm({
   form,
   emailValidation,
   expirationConfig,
+  accountNameHint,
+  accountNameError,
   onFieldChange,
   onValidateEmail,
   onGenPassword,
@@ -51,7 +55,8 @@ export function DynamicAccountForm({
         placeholder="ej. jperez"
         value={form.accountName}
         onChange={e => onFieldChange('accountName', e.target.value)}
-        hint="El técnico asigna la cuenta. Desde aquí se generan el UPN y el sAMAccountName."
+        error={accountNameError ?? undefined}
+        hint={accountNameHint}
       />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>

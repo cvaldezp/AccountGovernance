@@ -946,3 +946,59 @@ WHERE  object_id = OBJECT_ID('gov.AdministrativeScopeFilters')
   AND  is_unique = 1
   AND  has_filter = 1;
 GO
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Política de nombres de cuenta (Incremento 2.1) — reemplaza la limpieza
+-- silenciosa de caracteres (AccountCreationService.Ascii() /
+-- accountTypes.ts::normalizeToAscii()) por una regla configurable, única
+-- para todo el sistema de creación de cuentas (Genéricas, Partner, Servicio,
+-- Extensión, Privilegiadas y cualquier tipo futuro).
+--
+-- Singleton físico: la tabla solo admite Id=1 — CHECK (Id = 1) + PRIMARY KEY
+-- (Id) garantizan que nunca pueda existir una segunda fila, sin depender de
+-- la convención de "usar la primera fila". El seed corre una sola vez; a
+-- partir de ahí, UpdateAsync es un UPDATE puro sobre Id=1 (la fila siempre
+-- existe desde que se aplicó este script) — no hay branch IF EXISTS/INSERT
+-- que pueda introducir una carrera en la actualización.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.tables t
+    JOIN sys.schemas s ON t.schema_id = s.schema_id
+    WHERE t.name = 'AccountNamingPolicy' AND s.name = 'gov'
+)
+BEGIN
+    CREATE TABLE gov.AccountNamingPolicy (
+        Id                                   INT           NOT NULL,
+        AllowedChars                         NVARCHAR(100) NOT NULL,
+        MinLength                            INT           NOT NULL,
+        MaxLength                            INT           NOT NULL,
+        DisallowLeadingTrailingSpecialChars  BIT           NOT NULL DEFAULT 1,
+        DisallowConsecutiveSpecialChars      BIT           NOT NULL DEFAULT 1,
+        UpdatedAt                            DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+        UpdatedBy                            NVARCHAR(200) NULL,
+        CONSTRAINT PK_Gov_AccountNamingPolicy PRIMARY KEY (Id),
+        -- Garantía física de singleton: ninguna fila con Id distinto de 1 puede
+        -- existir jamás. Combinado con la PK, es matemáticamente imposible tener
+        -- más de una fila en esta tabla.
+        CONSTRAINT CK_Gov_AccountNamingPolicy_Singleton CHECK (Id = 1)
+    );
+END
+GO
+
+-- Seed idempotente — semilla segura sugerida en el diseño: minúsculas, dígitos,
+-- '-', '.', '_'. MaxLength=20 porque coincide con el límite real de AD para
+-- sAMAccountName cuando el tipo de cuenta no agrega prefijo (ver validación de
+-- longitud efectiva en AccountNamingPolicyService, que sí considera el prefijo).
+IF NOT EXISTS (SELECT 1 FROM gov.AccountNamingPolicy WHERE Id = 1)
+    INSERT INTO gov.AccountNamingPolicy
+        (Id, AllowedChars, MinLength, MaxLength,
+         DisallowLeadingTrailingSpecialChars, DisallowConsecutiveSpecialChars)
+    VALUES
+        (1, 'abcdefghijklmnopqrstuvwxyz0123456789-._', 3, 20, 1, 1);
+GO
+
+-- Verificación (para que un DBA confirme manualmente el resultado):
+SELECT COUNT(*) AS AccountNamingPolicy_RowCount FROM gov.AccountNamingPolicy;  -- debe ser exactamente 1
+SELECT * FROM gov.AccountNamingPolicy;
+GO

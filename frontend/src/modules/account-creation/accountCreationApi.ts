@@ -5,6 +5,7 @@ import type {
   AccountFormData, AccountPreviewData, ValidationResult, CreateResult,
   ExpirationConfig, ExpirationMode,
 } from './types';
+import type { AccountNamingPolicy } from '../../shared/account-naming/types';
 
 // ── Mock fallback — read-only data only ────────────────────────────────────────
 // Used exclusively by getAccountTypes() so the type selector works offline.
@@ -133,6 +134,7 @@ export const accountCreationApi = {
     typeKey:      AccountTypeKey,
     form:         AccountFormData,
     typeInfo:     AccountTypeInfo,
+    policy:       AccountNamingPolicy | null,
     subTypeInfo?: AccountSubTypeInfo,
   ): Promise<AccountPreviewData> {
     const url = '/api/accounts/preview';
@@ -173,7 +175,7 @@ export const accountCreationApi = {
         subTypeLabel:         raw.subTypeLabel,
       };
     } catch {
-      return computePreview(typeKey, form, typeInfo, subTypeInfo);
+      return computePreview(typeKey, form, typeInfo, policy, subTypeInfo);
     }
   },
 

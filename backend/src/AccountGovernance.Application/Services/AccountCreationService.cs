@@ -1,6 +1,3 @@
-using System.Globalization;
-using System.Text;
-using System.Text.RegularExpressions;
 using AccountGovernance.Application.Common;
 using AccountGovernance.Application.DTOs;
 using AccountGovernance.Application.Interfaces;
@@ -8,13 +5,14 @@ using AccountGovernance.Domain.Entities;
 
 namespace AccountGovernance.Application.Services;
 
-public sealed partial class AccountCreationService(
+public sealed class AccountCreationService(
     IAccountTypeRepository          accountTypeRepository,
     IAccountTypeGroupRepository     groupRepository,
     IGroupAssignmentService         groupAssignmentService,
     IAdGateway                      adGateway,
     IAccountCreationAuditRepository auditRepository,
-    IExpirationConfigRepository     expirationConfigRepository
+    IExpirationConfigRepository     expirationConfigRepository,
+    IAccountNamingPolicyService     namingPolicyService
 ) : IAccountCreationService
 {
     private const string AdDomain = "usfq.edu.ec";
@@ -108,7 +106,15 @@ public sealed partial class AccountCreationService(
             subTypeLabel = subType.Label;
         }
 
-        var sam         = ComputeSam(request, samPrefix);
+        var nameValidation = await namingPolicyService.ValidateAccountNameAsync(
+            request.AccountName ?? string.Empty, samPrefix, ct);
+        if (!nameValidation.IsValid)
+            return Result<AccountPreviewResponseDto>.Fail(
+                nameValidation.ErrorMessage ?? "El campo 'Cuenta' es obligatorio.", "INVALID_ACCOUNT_NAME");
+
+        var sam         = samPrefix is not null
+            ? $"{samPrefix}{nameValidation.NormalizedValue}"
+            : nameValidation.NormalizedValue;
         var displayName = ComputeDisplayName(request);
         var company     = view.DefaultCompany ?? "USFQ";
         var description = view.DescriptionTemplate;
@@ -188,8 +194,18 @@ public sealed partial class AccountCreationService(
         if (string.IsNullOrWhiteSpace(request.Description))
             errors.Add("El detalle de la cuenta es obligatorio.");
 
-        // Compute attributes
-        var sam         = ComputeSamFromRequest(request, samPrefix);
+        // Compute attributes — nameValidation.NormalizedValue es siempre trim +
+        // minúsculas, nunca con caracteres eliminados. Si no es válido y el campo
+        // sí fue provisto (el caso vacío ya lo cubre el error de arriba, sin
+        // duplicarlo), se agrega el motivo específico del rechazo.
+        var nameValidation = await namingPolicyService.ValidateAccountNameAsync(
+            request.AccountName ?? string.Empty, samPrefix, ct);
+        if (!nameValidation.IsValid && !string.IsNullOrWhiteSpace(request.AccountName))
+            errors.Add(nameValidation.ErrorMessage!);
+
+        var sam         = samPrefix is not null
+            ? $"{samPrefix}{nameValidation.NormalizedValue}"
+            : nameValidation.NormalizedValue;
         var upn         = sam.Length > 0 ? $"{sam}@{AdDomain}" : string.Empty;
         var displayName = ComputeDisplayNameFromRequest(request);
         var company     = view.DefaultCompany ?? "USFQ";
@@ -365,7 +381,14 @@ public sealed partial class AccountCreationService(
             }
         }
 
-        var sam         = ComputeSamFromRequest(request, samPrefix);
+        // ValidateCreateAsync (línea 360) ya confirmó CanCreate=true, lo que incluye
+        // que el nombre de cuenta pasó la política — se recalcula acá el mismo
+        // resultado (determinista) para obtener el valor normalizado real a usar.
+        var nameValidation = await namingPolicyService.ValidateAccountNameAsync(
+            request.AccountName ?? string.Empty, samPrefix, ct);
+        var sam         = samPrefix is not null
+            ? $"{samPrefix}{nameValidation.NormalizedValue}"
+            : nameValidation.NormalizedValue;
         var upn         = $"{sam}@{AdDomain}";
         var displayName = ComputeDisplayNameFromRequest(request);
         var givenName   = request.FirstName?.Trim();
@@ -613,12 +636,10 @@ public sealed partial class AccountCreationService(
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────
-
-    private static string ComputeSamFromRequest(AccountCreationRequestDto req, string? samPrefix)
-    {
-        var cuenta = Ascii(req.AccountName ?? string.Empty);
-        return samPrefix is not null ? $"{samPrefix}{cuenta}" : cuenta;
-    }
+    // El sAMAccountName ya no se calcula acá — namingPolicyService.ValidateAccountNameAsync
+    // es la única fuente de normalización (trim + minúsculas, nunca eliminación de
+    // caracteres) y validación del nombre de cuenta, para los tres flujos
+    // (Preview/ValidateCreate/Create) y para cualquier tipo de cuenta presente o futuro.
 
     private static string ComputeDisplayNameFromRequest(AccountCreationRequestDto req)
         => string.Join(" ",
@@ -636,12 +657,6 @@ public sealed partial class AccountCreationService(
              .Replace(">",  "\\>")
              .Replace(";",  "\\;")
              .Replace("#",  "\\#");
-
-    private static string ComputeSam(AccountPreviewRequestDto req, string? samPrefix)
-    {
-        var cuenta = Ascii(req.AccountName ?? string.Empty);
-        return samPrefix is not null ? $"{samPrefix}{cuenta}" : cuenta;
-    }
 
     private static string ComputeDisplayName(AccountPreviewRequestDto req)
         => string.Join(" ",
@@ -683,17 +698,4 @@ public sealed partial class AccountCreationService(
             "El atributo Department de la cuenta nueva quedará vacío.");
         return null;
     }
-
-    [GeneratedRegex(@"[^a-z0-9]")]
-    private static partial Regex NonAlphanumericRegex();
-
-    private static string Ascii(string input)
-    {
-        var sb = new StringBuilder();
-        foreach (var c in input.Normalize(NormalizationForm.FormD))
-            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
-                sb.Append(c);
-        return NonAlphanumericRegex().Replace(sb.ToString().ToLowerInvariant(), string.Empty);
-    }
-
 }

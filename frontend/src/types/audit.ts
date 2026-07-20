@@ -19,7 +19,8 @@ export type AuditActionType =
   | 'ScopeDeactivated'
   | 'ScopeFilterCreated'
   | 'ScopeFilterUpdated'
-  | 'ScopeFilterDeleted';
+  | 'ScopeFilterDeleted'
+  | 'NamingPolicyUpdated';
 
 export interface AuditEntry {
   id:          string;
