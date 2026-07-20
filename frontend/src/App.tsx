@@ -14,6 +14,7 @@ import { AccountTypeConfigPage } from './modules/account-type-config/AccountType
 import { InitialGroupsPage } from './modules/initial-groups/InitialGroupsPage';
 import { SystemRolesConfigPage } from './modules/system-roles/SystemRolesConfigPage';
 import { DistributionListsPage } from './modules/distribution-lists/DistributionListsPage';
+import { AdministrativeScopesPage } from './modules/scopes/AdministrativeScopesPage';
 
 function RouterView() {
   const { currentRoute } = useRouter();
@@ -30,6 +31,7 @@ function RouterView() {
     case 'initial-groups':      return <InitialGroupsPage />;
     case 'system-roles-config': return <SystemRolesConfigPage />;
     case 'distribution-lists':  return <DistributionListsPage />;
+    case 'administrative-scopes': return <AdministrativeScopesPage />;
     default:                 return <DashboardPage />;
   }
 }

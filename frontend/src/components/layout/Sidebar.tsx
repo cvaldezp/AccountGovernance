@@ -34,8 +34,12 @@ const CONFIG_NAV: NavItem[] = [
 ];
 
 // Visible only to SystemAdmin — these tables control every other user's authorization.
+// administrative-scopes: los Scopes exponen estructura interna de AD (Base DN, OUs,
+// atributos, ConnectionProfile) — no deben ser visibles para ningún otro rol, ni
+// siquiera en modo lectura, a diferencia del Catálogo AD / Matriz de Permisos.
 const SYSTEM_ADMIN_NAV: NavItem[] = [
-  { key: 'system-roles-config', label: 'Roles y Grupos', icon: '⚙' },
+  { key: 'system-roles-config',   label: 'Roles y Grupos',          icon: '⚙' },
+  { key: 'administrative-scopes', label: 'Ámbitos Administrativos', icon: '◎' },
 ];
 
 function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }) {

@@ -10,7 +10,11 @@ namespace AccountGovernance.Api.Controllers;
 /// Administra gov.AdministrativeScopes / gov.AdministrativeScopeFilters — Incremento 1
 /// del modelo de Scope. Sin enforcement todavía: estos ámbitos no restringen ninguna
 /// operación real hasta que se implementen RoleScopeAssignment y el scope-check
-/// (incrementos posteriores). Mutaciones restringidas a SystemAdmin.
+/// (incrementos posteriores). Todo el controlador — lectura y escritura — está
+/// restringido a SystemAdmin: un Scope expone estructura interna de AD (Base DN,
+/// ConnectionProfile, Filters) que no debe ser legible por ningún otro rol, ni
+/// siquiera en modo solo-lectura (a diferencia del Catálogo de Atributos o la
+/// Matriz de Permisos, que sí permiten lectura abierta).
 /// </summary>
 [Authorize]
 [ApiController]
@@ -27,23 +31,34 @@ public sealed class AdministrativeScopesController(
         return roles.Contains("SystemAdmin", StringComparer.OrdinalIgnoreCase);
     }
 
-    /// <summary>Lista todos los ámbitos administrativos (activos e inactivos).</summary>
+    /// <summary>Lista todos los ámbitos administrativos (activos e inactivos). SystemAdmin únicamente.</summary>
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<AdministrativeScopeDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetAll(CancellationToken ct)
     {
+        if (!await IsSystemAdminAsync(ct))
+            return StatusCode(403, new { error = "Solo el rol SystemAdmin puede administrar ámbitos administrativos." });
+
         var result = await scopeService.GetAllAsync(ct);
         return result.IsSuccess
             ? Ok(result.Data)
             : StatusCode(StatusCodes.Status500InternalServerError, new { error = result.Error });
     }
 
-    /// <summary>Obtiene un ámbito administrativo por su ScopeKey.</summary>
+    /// <summary>Obtiene un ámbito administrativo por su ScopeKey. SystemAdmin únicamente.</summary>
     [HttpGet("{scopeKey}")]
     [ProducesResponseType(typeof(AdministrativeScopeDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetByKey(string scopeKey, CancellationToken ct)
     {
+        // El gate corre antes de tocar scopeService — así un caller no-SystemAdmin
+        // recibe siempre el mismo 403, sin importar si scopeKey existe o no. Nunca
+        // debe poder distinguir "no tengo permiso" de "no existe" desde afuera.
+        if (!await IsSystemAdminAsync(ct))
+            return StatusCode(403, new { error = "Solo el rol SystemAdmin puede administrar ámbitos administrativos." });
+
         var result = await scopeService.GetByKeyAsync(scopeKey, ct);
         return result.IsSuccess ? Ok(result.Data) : NotFound(new { error = result.Error });
     }
