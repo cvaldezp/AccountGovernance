@@ -26,6 +26,9 @@ const ACTION_LABELS: Record<AuditActionType, string> = {
   ScopeFilterUpdated:            'Filtro de ámbito editado',
   ScopeFilterDeleted:            'Filtro de ámbito eliminado',
   NamingPolicyUpdated:           'Política de nombres editada',
+  RoleScopeAssigned:             'Ámbito asignado a rol',
+  RoleScopeActivated:            'Asignación de ámbito activada',
+  RoleScopeDeactivated:          'Asignación de ámbito inactivada',
 };
 
 const ACTION_VARIANT: Record<AuditActionType, 'info' | 'success' | 'warning'> = {
@@ -47,6 +50,9 @@ const ACTION_VARIANT: Record<AuditActionType, 'info' | 'success' | 'warning'> = 
   ScopeFilterUpdated:            'info',
   ScopeFilterDeleted:            'warning',
   NamingPolicyUpdated:           'info',
+  RoleScopeAssigned:             'success',
+  RoleScopeActivated:            'success',
+  RoleScopeDeactivated:          'warning',
 };
 
 const DOMAIN_COLOR: Record<string, string> = {

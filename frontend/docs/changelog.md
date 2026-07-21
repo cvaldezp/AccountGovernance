@@ -1,5 +1,47 @@
 # Changelog
 
+## [2026-07-20] — Incremento 3: asignación de Ámbitos a Roles (RoleScopeAssignment)
+
+### Agregado
+
+**Backend**
+- `gov.RoleScopeAssignments` — asigna Ámbitos Administrativos a roles del
+  sistema. Restricción única **sin filtro** sobre `(SystemRoleId,
+  AdministrativeScopeId)`: solo puede existir una fila por par en toda su
+  vida, activa o inactiva — reactivar es un `UPDATE` sobre la misma fila
+  (`PATCH .../status`), nunca un `INSERT` nuevo. Sin `DELETE` físico.
+- `GET/POST /api/role-scope-assignments`,
+  `GET /api/role-scope-assignments/{id}`,
+  `PATCH /api/role-scope-assignments/{id}/status` — controlador dedicado,
+  restringido a `SystemAdmin` (incluida la lectura). `POST` exige que el rol
+  y el ámbito existan y estén activos; distingue `DUPLICATE_ASSIGNMENT`
+  (activa) de `ASSIGNMENT_EXISTS_INACTIVE` (debe reactivarse).
+- `AuditActionType.RoleScopeAssigned` / `RoleScopeActivated` /
+  `RoleScopeDeactivated` — cada mutación auditada en `gov.AuditEntries` con
+  `RoleKey`, `ScopeKey`, estado anterior/nuevo, operador y fecha UTC.
+- Sin enforcement: estas asignaciones no restringen ninguna operación real
+  todavía. Semántica de efectividad futura documentada (rol + ámbito +
+  asignación simultáneamente activos, sin cascada al desactivar un padre) en
+  `docs/role-scope-assignment.md`.
+
+**Frontend**
+- `shared/role-scope-assignments/` (`useRoleScopeAssignments`) — fuente
+  única de datos, consumida desde dos superficies sin duplicar lógica de
+  mutación: administración primaria en "Roles y Grupos" (nueva sección por
+  rol) y referencia cruzada de solo lectura en "Ámbitos Administrativos".
+
+### Pruebas
+
+Build de backend (`dotnet build`, 0 advertencias/0 errores) y de frontend
+(`tsc -b` + `vite build`) verificados; `npx eslint .` sin ninguna entrada
+nueva sobre el baseline preexistente de 19 problemas. **Pendiente —
+verificación operacional en Development** (sin credenciales SQL funcionales
+en este entorno, mismo bloqueo ya documentado para el Incremento 2.1):
+procedimiento reproducible completo en `docs/role-scope-assignment.md` §
+"Validación operacional pendiente".
+
+---
+
 ## [2026-07-20] — Incremento 2.1: política de nombres de cuenta configurable
 
 ### Agregado

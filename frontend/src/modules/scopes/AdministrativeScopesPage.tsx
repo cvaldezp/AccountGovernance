@@ -4,6 +4,7 @@ import type { Column } from '../../shared/ui';
 import { useAdministrativeScopes } from './useAdministrativeScopes';
 import { FILTER_OPERATORS } from './types';
 import type { AdministrativeScope, AdministrativeScopeFilter, CreateScopeForm, FilterForm, UpdateScopeForm } from './types';
+import { useRoleScopeAssignments } from '../role-scope-assignments/useRoleScopeAssignments';
 
 function ErrorBanner({ message }: { message: string }) {
   return (
@@ -201,7 +202,60 @@ function FilterRow({
   );
 }
 
-function ScopeDetailPanel({ hook }: { hook: ReturnType<typeof useAdministrativeScopes> }) {
+function AssignedRolesCard({
+  scopeKey, roleAssignmentsHook,
+}: {
+  scopeKey: string;
+  roleAssignmentsHook: ReturnType<typeof useRoleScopeAssignments>;
+}) {
+  // Solo lectura — la administración de estas asignaciones vive en "Roles y
+  // Grupos" (SystemRolesConfigPage), que comparte esta misma fuente de datos
+  // (useRoleScopeAssignments) para no duplicar estado ni lógica de mutación.
+  const { scopesByRole, loading } = roleAssignmentsHook;
+  const roles = scopesByRole(scopeKey);
+
+  return (
+    <AppCard title={`Roles con este ámbito asignado (${roles.length})`}>
+      {loading ? (
+        <div className="ds-loading">Cargando…</div>
+      ) : roles.length === 0 ? (
+        <div style={{
+          padding: '14px', textAlign: 'center', color: 'var(--ds-neutral-400)',
+          fontSize: 'var(--ds-text-sm)', border: '1px dashed var(--ds-neutral-200)',
+          borderRadius: 'var(--ds-radius-lg)',
+        }}>
+          Ningún rol tiene asignado este ámbito todavía. Adminístralo desde "Roles y Grupos".
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {roles.map(a => (
+            <div key={a.id} style={{
+              display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
+              padding: '10px 14px', border: '1px solid var(--ds-neutral-200)',
+              borderRadius: 'var(--ds-radius-lg)',
+              background: a.isActive ? 'var(--ds-neutral-0)' : 'var(--ds-neutral-50)',
+              opacity: a.isActive ? 1 : 0.65,
+            }}>
+              <span style={{ fontWeight: 600, fontSize: 'var(--ds-text-sm)', fontFamily: 'var(--ds-font-mono)', flex: 1 }}>
+                {a.roleKey}
+              </span>
+              <AppBadge variant={a.isActive ? 'success' : 'neutral'} size="sm">
+                {a.isActive ? 'activo' : 'inactivo'}
+              </AppBadge>
+            </div>
+          ))}
+        </div>
+      )}
+    </AppCard>
+  );
+}
+
+function ScopeDetailPanel({
+  hook, roleAssignmentsHook,
+}: {
+  hook: ReturnType<typeof useAdministrativeScopes>;
+  roleAssignmentsHook: ReturnType<typeof useRoleScopeAssignments>;
+}) {
   const {
     selectedScope,
     editingScope, scopeForm, savingScope, scopeSaveError,
@@ -359,6 +413,9 @@ function ScopeDetailPanel({ hook }: { hook: ReturnType<typeof useAdministrativeS
           </div>
         )}
       </AppCard>
+
+      {/* ── Roles asignados (solo lectura) ──────────────────────────────── */}
+      <AssignedRolesCard scopeKey={selectedScope.scopeKey} roleAssignmentsHook={roleAssignmentsHook} />
     </div>
   );
 }
@@ -366,6 +423,8 @@ function ScopeDetailPanel({ hook }: { hook: ReturnType<typeof useAdministrativeS
 export function AdministrativeScopesPage() {
   const { user } = useAuth();
   const isSystemAdmin = user?.roles.includes('SystemAdmin') ?? false;
+
+  const roleAssignmentsHook = useRoleScopeAssignments();
 
   const hook = useAdministrativeScopes();
   const { scopes, loading, loadError, selectScope } = hook;
@@ -438,7 +497,7 @@ export function AdministrativeScopesPage() {
           />
         </AppCard>
 
-        <ScopeDetailPanel hook={hook} />
+        <ScopeDetailPanel hook={hook} roleAssignmentsHook={roleAssignmentsHook} />
       </div>
 
       <AppModal

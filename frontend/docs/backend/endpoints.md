@@ -198,3 +198,34 @@ espacios, sin caracteres de control, subconjunto del superconjunto seguro
 (`abcdefghijklmnopqrstuvwxyz0123456789-._`), sin caracteres duplicados, con al
 menos un carácter alfanumérico; `MinLength ≥ 1`; `MaxLength ≥ MinLength`;
 `MaxLength ≤ 20` (límite real de `sAMAccountName` en Active Directory).
+
+---
+
+## Asignación de Ámbitos a Roles (RoleScopeAssignment)
+
+Asigna Ámbitos Administrativos a roles del sistema — Incremento 3. Sin
+enforcement todavía: no restringe ninguna operación real. Detalle completo en
+`docs/role-scope-assignment.md`. **Toda la API, incluida la lectura,
+restringida a `SystemAdmin`.**
+
+### `GET /api/role-scope-assignments`
+Lista todas las asignaciones. Filtros opcionales `?roleKey=` y `?scopeKey=`.
+
+### `GET /api/role-scope-assignments/{id}`
+Una asignación por Id. `404` si no existe.
+
+### `POST /api/role-scope-assignments`
+Crea una asignación. **Body:** `{ "roleKey": "...", "scopeKey": "..." }`.
+
+| code | Descripción |
+|------|-------------|
+| `ROLE_NOT_FOUND` / `SCOPE_NOT_FOUND` | El rol o el ámbito no existen |
+| `ROLE_INACTIVE` / `SCOPE_INACTIVE` | El rol o el ámbito existen pero están inactivos |
+| `DUPLICATE_ASSIGNMENT` | Ya existe una asignación **activa** para este par |
+| `ASSIGNMENT_EXISTS_INACTIVE` | Ya existe una asignación **inactiva** para este par — reactivar con `PATCH`, no recrear |
+
+### `PATCH /api/role-scope-assignments/{id}/status`
+Activa o inactiva una asignación existente. **Body:** `{ "isActive": true }`.
+Sin `DELETE` — la fila se conserva siempre para trazabilidad y reactivación.
+Si el estado enviado es igual al actual: `400 NO_STATE_CHANGE` (no es una
+mutación real, no genera auditoría).

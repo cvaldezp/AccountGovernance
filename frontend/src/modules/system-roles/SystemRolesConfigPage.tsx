@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AppCard, AppButton, AppBadge, AppInput, AppPageHeader } from '../../shared/ui';
 import { useAuth } from '../../auth/useAuth';
 import { useSystemRoles } from './useSystemRoles';
 import type { AdGroupValidation, CreateGroupForm, SystemRole } from './types';
+import { useRoleScopeAssignments } from '../role-scope-assignments/useRoleScopeAssignments';
+import { administrativeScopesApi } from '../scopes/administrativeScopesApi';
+import type { AdministrativeScope } from '../scopes/types';
 
 function AdValidationResult({ v }: { v: AdGroupValidation }) {
   if (!v.isValid) {
@@ -110,9 +113,164 @@ function GroupForm({
   );
 }
 
+function RoleScopesSection({
+  role, scopes, hook,
+}: {
+  role:   SystemRole;
+  scopes: AdministrativeScope[];
+  hook:   ReturnType<typeof useRoleScopeAssignments>;
+}) {
+  const {
+    assignmentsByRole,
+    creatingForRole, createScopeKey, setCreateScopeKey, saving, createError,
+    openCreate, cancelCreate, saveCreate,
+    togglingId, toggleError, toggleStatus,
+  } = hook;
+
+  const roleAssignments = assignmentsByRole(role.roleKey);
+  const isAdding = creatingForRole === role.roleKey;
+
+  // Solo ámbitos activos y que este rol todavía no tenga asignados (activa o
+  // inactivamente) — un ámbito ya asignado se reactiva desde su propia fila,
+  // nunca se vuelve a crear (evita disparar DUPLICATE_ASSIGNMENT /
+  // ASSIGNMENT_EXISTS_INACTIVE desde el flujo normal de la UI).
+  const assignedScopeKeys = new Set(roleAssignments.map(a => a.scopeKey));
+  const availableScopes = scopes.filter(s => s.isActive && !assignedScopeKeys.has(s.scopeKey));
+
+  return (
+    <div style={{ borderTop: '1px solid var(--ds-neutral-200)', paddingTop: '10px' }}>
+      <div style={{ fontSize: 'var(--ds-text-xs)', color: 'var(--ds-neutral-500)', marginBottom: '8px', fontWeight: 600 }}>
+        Ámbitos Administrativos
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {roleAssignments.length === 0 && !isAdding && (
+          <div style={{
+            padding: '14px', textAlign: 'center', color: 'var(--ds-neutral-400)',
+            fontSize: 'var(--ds-text-sm)', border: '1px dashed var(--ds-neutral-200)',
+            borderRadius: 'var(--ds-radius-lg)',
+          }}>
+            Sin ámbitos asignados a este rol.
+          </div>
+        )}
+
+        {roleAssignments.map(a => (
+          <div key={a.id} style={{
+            display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
+            padding: '10px 14px', border: '1px solid var(--ds-neutral-200)',
+            borderRadius: 'var(--ds-radius-lg)',
+            background: a.isActive ? 'var(--ds-neutral-0)' : 'var(--ds-neutral-50)',
+            opacity: a.isActive ? 1 : 0.65,
+          }}>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontWeight: 600, fontSize: 'var(--ds-text-sm)', fontFamily: 'var(--ds-font-mono)' }}>
+                {a.scopeKey}
+              </span>
+              <AppBadge variant={a.isActive ? 'success' : 'neutral'} size="sm">
+                {a.isActive ? 'activo' : 'inactivo'}
+              </AppBadge>
+            </div>
+            <AppButton
+              variant={a.isActive ? 'danger' : 'primary'} size="sm"
+              onClick={() => toggleStatus(a)} loading={togglingId === a.id}
+            >
+              {a.isActive ? 'Inactivar' : 'Reactivar'}
+            </AppButton>
+          </div>
+        ))}
+
+        {isAdding && (
+          <div style={{
+            padding: '14px', border: '2px solid var(--ds-success-border)',
+            borderRadius: 'var(--ds-radius-lg)', background: 'var(--ds-success-light)',
+          }}>
+            <div style={{ fontWeight: 600, fontSize: 'var(--ds-text-sm)', color: 'var(--ds-success-dark)', marginBottom: '10px' }}>
+              Nuevo ámbito para {role.displayName}
+            </div>
+
+            {availableScopes.length === 0 ? (
+              <div style={{ fontSize: 'var(--ds-text-sm)', color: 'var(--ds-neutral-500)' }}>
+                No hay ámbitos activos disponibles para asignar. Crea o activa un ámbito en
+                "Ámbitos Administrativos" primero.
+              </div>
+            ) : (
+              <select
+                value={createScopeKey}
+                onChange={e => setCreateScopeKey(e.target.value)}
+                style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--ds-neutral-300)', borderRadius: '4px', fontSize: 'var(--ds-text-sm)' }}
+              >
+                <option value="">Selecciona un ámbito…</option>
+                {availableScopes.map(s => (
+                  <option key={s.scopeKey} value={s.scopeKey}>{s.name} ({s.scopeKey})</option>
+                ))}
+              </select>
+            )}
+
+            {createError && (
+              <div style={{
+                marginTop: '10px', padding: '8px 12px', borderRadius: 'var(--ds-radius-lg)',
+                background: 'var(--ds-danger-light)', border: '1px solid var(--ds-danger-border)',
+                color: 'var(--ds-danger-dark)', fontSize: 'var(--ds-text-sm)',
+              }}>
+                {createError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '10px' }}>
+              <AppButton variant="secondary" size="sm" onClick={cancelCreate} disabled={saving}>Cancelar</AppButton>
+              <AppButton
+                variant="primary" size="sm" onClick={saveCreate} loading={saving}
+                disabled={availableScopes.length === 0 || !createScopeKey}
+              >
+                Guardar
+              </AppButton>
+            </div>
+          </div>
+        )}
+
+        {toggleError && (
+          <div style={{
+            padding: '8px 12px', borderRadius: 'var(--ds-radius-lg)',
+            background: 'var(--ds-danger-light)', border: '1px solid var(--ds-danger-border)',
+            color: 'var(--ds-danger-dark)', fontSize: 'var(--ds-text-sm)',
+          }}>
+            {toggleError}
+          </div>
+        )}
+      </div>
+
+      {!isAdding && (
+        <div style={{ marginTop: '10px' }}>
+          {role.isActive ? (
+            <AppButton variant="secondary" size="sm" onClick={() => openCreate(role.roleKey)}>
+              + Agregar ámbito
+            </AppButton>
+          ) : (
+            <span style={{ fontSize: 'var(--ds-text-xs)', color: 'var(--ds-neutral-400)' }}>
+              Activa el rol para poder asignarle ámbitos.
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SystemRolesConfigPage() {
   const { user } = useAuth();
   const isSystemAdmin = user?.roles.includes('SystemAdmin') ?? false;
+
+  const scopeAssignments = useRoleScopeAssignments();
+  const [administrativeScopes, setAdministrativeScopes] = useState<AdministrativeScope[]>([]);
+
+  // Solo para poblar el selector de "+ Agregar ámbito" — la fuente de verdad
+  // de asignaciones sigue siendo exclusivamente useRoleScopeAssignments.
+  useEffect(() => {
+    void administrativeScopesApi.getAll().then(setAdministrativeScopes).catch(() => {
+      // Si falla, el selector simplemente queda sin opciones — el error real
+      // de asignación (si lo hay) ya lo muestra scopeAssignments.createError.
+    });
+  }, []);
 
   const {
     roles, loading, loadError,
@@ -333,6 +491,9 @@ export function SystemRolesConfigPage() {
                     </div>
                   )}
                 </div>
+
+                {/* ── Ámbitos Administrativos ──────────────────────────── */}
+                <RoleScopesSection role={role} scopes={administrativeScopes} hook={scopeAssignments} />
               </div>
             </AppCard>
           );

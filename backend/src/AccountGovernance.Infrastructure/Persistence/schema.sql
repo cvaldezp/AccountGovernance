@@ -1002,3 +1002,69 @@ GO
 SELECT COUNT(*) AS AccountNamingPolicy_RowCount FROM gov.AccountNamingPolicy;  -- debe ser exactamente 1
 SELECT * FROM gov.AccountNamingPolicy;
 GO
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- RoleScopeAssignment (Incremento 3) — asigna Ámbitos Administrativos a roles
+-- del sistema. Sin enforcement todavía: estas asignaciones no restringen
+-- ninguna operación real hasta que se implemente el scope-check sobre
+-- operaciones de usuario (incremento posterior).
+--
+-- Una asignación será efectiva únicamente cuando estén activos
+-- simultáneamente: RoleScopeAssignments.IsActive, SystemRole.IsActive y
+-- AdministrativeScope.IsActive. Desactivar posteriormente un rol o un ámbito
+-- NO modifica en cascada las asignaciones — simplemente las vuelve inertes
+-- mientras el padre permanezca inactivo. El futuro incremento de enforcement
+-- deberá incluir un preflight de roles sin ninguna asignación activa, para
+-- evitar bloqueos sorpresivos al activarse.
+--
+-- Modelo de relación única: UNIQUE (SystemRoleId, AdministrativeScopeId) SIN
+-- filtro — a diferencia de UQ_Gov_AdministrativeScopeFilters_Active, aquí solo
+-- puede existir UNA fila por par (rol, ámbito) en toda la vida de la relación,
+-- activa o inactiva. Reactivar es siempre un UPDATE sobre la fila existente
+-- (PATCH .../status), nunca un INSERT nuevo — la trazabilidad de cambios de
+-- estado vive en gov.AuditEntries (RoleScopeAssigned/Activated/Deactivated),
+-- no en filas duplicadas de esta tabla. Por eso mismo esta tabla NO tiene
+-- DELETE — la baja es exclusivamente IsActive=0, preservando la fila.
+--
+-- Sin seed: la tabla nace vacía. Antes de activar el enforcement se diseñará
+-- y ejecutará un preflight obligatorio aparte, que decidirá en ese momento si
+-- se necesita un ámbito "global" y cuál es su BaseDn validado — no se asume
+-- ninguno acá.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.tables t
+    JOIN sys.schemas s ON t.schema_id = s.schema_id
+    WHERE t.name = 'RoleScopeAssignments' AND s.name = 'gov'
+)
+BEGIN
+    CREATE TABLE gov.RoleScopeAssignments (
+        Id                     INT           NOT NULL IDENTITY(1,1) PRIMARY KEY,
+        SystemRoleId           INT           NOT NULL,
+        AdministrativeScopeId  INT           NOT NULL,
+        IsActive               BIT           NOT NULL DEFAULT 1,
+        CreatedAt              DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+        CreatedBy              NVARCHAR(200) NULL,
+        UpdatedAt              DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+        UpdatedBy              NVARCHAR(200) NULL,
+        CONSTRAINT FK_Gov_RoleScopeAssignments_Role FOREIGN KEY (SystemRoleId)
+            REFERENCES gov.SystemRoles(Id),
+        CONSTRAINT FK_Gov_RoleScopeAssignments_Scope FOREIGN KEY (AdministrativeScopeId)
+            REFERENCES gov.AdministrativeScopes(Id),
+        CONSTRAINT UQ_Gov_RoleScopeAssignments_Pair UNIQUE (SystemRoleId, AdministrativeScopeId)
+    );
+
+    CREATE INDEX IX_Gov_RoleScopeAssignments_RoleId  ON gov.RoleScopeAssignments (SystemRoleId);
+    CREATE INDEX IX_Gov_RoleScopeAssignments_ScopeId ON gov.RoleScopeAssignments (AdministrativeScopeId);
+    CREATE INDEX IX_Gov_RoleScopeAssignments_Active  ON gov.RoleScopeAssignments (IsActive);
+END
+GO
+
+-- Verificación (para que un DBA confirme manualmente el resultado):
+SELECT COUNT(*) AS RoleScopeAssignments_Count FROM gov.RoleScopeAssignments;  -- debe ser 0 recién aplicado el script
+
+SELECT name, is_unique
+FROM   sys.indexes
+WHERE  object_id = OBJECT_ID('gov.RoleScopeAssignments')
+  AND  is_unique = 1;
+GO

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd C:\\\\RepositorioClaude\\\\AccountGovernanceRepo\\\\frontend; npx tsc --noEmit 2>&1; Write-Host \"Exit: $LASTEXITCODE\")",
+      "Skill(artifact-design)"
+    ]
+  }
+}

@@ -20,6 +20,7 @@ public static class DependencyInjection
         services.AddScoped<IDistributionListService,         DistributionListService>();
         services.AddScoped<IAdministrativeScopeService,      AdministrativeScopeService>();
         services.AddScoped<IAccountNamingPolicyService,      AccountNamingPolicyService>();
+        services.AddScoped<IRoleScopeAssignmentService,      RoleScopeAssignmentService>();
         return services;
     }
 }

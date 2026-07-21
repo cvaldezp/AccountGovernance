@@ -20,4 +20,7 @@ public enum AuditActionType
     ScopeFilterUpdated,
     ScopeFilterDeleted,
     NamingPolicyUpdated,
+    RoleScopeAssigned,
+    RoleScopeActivated,
+    RoleScopeDeactivated,
 }

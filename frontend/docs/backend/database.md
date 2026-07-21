@@ -87,6 +87,29 @@ UpdatedBy                            NVARCHAR(200) NULL
 Seed por defecto: `AllowedChars='abcdefghijklmnopqrstuvwxyz0123456789-._'`,
 `MinLength=3`, `MaxLength=20`, ambos booleanos en `1`.
 
+### `gov.RoleScopeAssignments`
+
+Asigna Ámbitos Administrativos a roles del sistema — Incremento 3. Sin
+enforcement todavía. Ver `docs/role-scope-assignment.md` para el detalle
+completo (semántica de efectividad, reglas de negocio, API, auditoría).
+
+```sql
+Id                     INT IDENTITY PRIMARY KEY
+SystemRoleId           INT NOT NULL REFERENCES gov.SystemRoles(Id)
+AdministrativeScopeId  INT NOT NULL REFERENCES gov.AdministrativeScopes(Id)
+IsActive               BIT NOT NULL DEFAULT 1
+CreatedAt / CreatedBy
+UpdatedAt / UpdatedBy
+
+CONSTRAINT UQ_Gov_RoleScopeAssignments_Pair UNIQUE (SystemRoleId, AdministrativeScopeId)
+```
+
+Restricción única **sin filtro** — a diferencia de
+`UQ_Gov_AdministrativeScopeFilters_Active`, solo puede existir una fila por
+par (rol, ámbito) en toda su vida, activa o inactiva. Sin `DELETE`: la baja
+es exclusivamente `IsActive=0`, la fila se conserva siempre. Sin seed — la
+tabla nace vacía.
+
 ## IIS / App Pool
 
 - La identidad del App Pool debe tener `db_datareader + db_datawriter + EXECUTE` en schema `gov`
