@@ -216,6 +216,12 @@ function AssignedRolesCard({
 
   return (
     <AppCard title={`Roles con este ámbito asignado (${roles.length})`}>
+      <div className="ds-alert ds-alert--info" style={{ marginBottom: '10px' }}>
+        Configuración preparatoria. Las asignaciones entre roles y ámbitos todavía no
+        restringen las operaciones sobre Active Directory. Esta validación se habilitará
+        en un incremento posterior.
+      </div>
+
       {loading ? (
         <div className="ds-loading">Cargando…</div>
       ) : roles.length === 0 ? (

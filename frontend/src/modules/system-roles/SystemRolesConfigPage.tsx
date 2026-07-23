@@ -143,6 +143,12 @@ function RoleScopesSection({
         Ámbitos Administrativos
       </div>
 
+      <div className="ds-alert ds-alert--info" style={{ marginBottom: '10px' }}>
+        Configuración preparatoria. Las asignaciones entre roles y ámbitos todavía no
+        restringen las operaciones sobre Active Directory. Esta validación se habilitará
+        en un incremento posterior.
+      </div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {roleAssignments.length === 0 && !isAdding && (
           <div style={{
