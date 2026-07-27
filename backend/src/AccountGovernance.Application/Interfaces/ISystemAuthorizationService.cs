@@ -26,4 +26,11 @@ public interface ISystemAuthorizationService
     /// a role by arrival order.
     /// </exception>
     Task<string?> ResolvePrimaryRoleAsync(IReadOnlyList<string> roles, CancellationToken ct = default);
+
+    /// <summary>
+    /// Centralizes the SystemAdmin check previously duplicated identically across five API
+    /// controllers, without changing its semantics. Equivalent to
+    /// <c>(await GetUserRolesAsync(upn, ct)).Contains("SystemAdmin", StringComparer.OrdinalIgnoreCase)</c>.
+    /// </summary>
+    Task<bool> IsSystemAdminAsync(string? upn, CancellationToken ct = default);
 }

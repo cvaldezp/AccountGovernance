@@ -16,11 +16,8 @@ public sealed class PermissionsController(
     ICurrentUserService          currentUser,
     ISystemAuthorizationService  systemAuth) : ControllerBase
 {
-    private async Task<bool> IsSystemAdminAsync(CancellationToken ct)
-    {
-        var roles = await systemAuth.GetUserRolesAsync(currentUser.UserPrincipalName, ct);
-        return roles.Contains("SystemAdmin", StringComparer.OrdinalIgnoreCase);
-    }
+    private Task<bool> IsSystemAdminAsync(CancellationToken ct)
+        => systemAuth.IsSystemAdminAsync(currentUser.UserPrincipalName, ct);
 
     /// <summary>
     /// Return visible/editable field configuration for the caller's own resolved role.

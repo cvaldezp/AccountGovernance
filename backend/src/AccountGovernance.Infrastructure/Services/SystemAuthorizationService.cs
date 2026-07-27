@@ -97,4 +97,10 @@ public sealed class SystemAuthorizationService(
             $"None of the resolved roles [{string.Join(", ", roles)}] are currently active " +
             $"in gov.SystemRoles [{string.Join(", ", activeRoles.Select(r => r.RoleKey))}].");
     }
+
+    public async Task<bool> IsSystemAdminAsync(string? upn, CancellationToken ct = default)
+    {
+        var roles = await GetUserRolesAsync(upn, ct);
+        return roles.Contains("SystemAdmin", StringComparer.OrdinalIgnoreCase);
+    }
 }

@@ -22,11 +22,8 @@ public sealed class AccountNamingPolicyController(
     ICurrentUserService          currentUser,
     ISystemAuthorizationService  systemAuth) : ControllerBase
 {
-    private async Task<bool> IsSystemAdminAsync(CancellationToken ct)
-    {
-        var roles = await systemAuth.GetUserRolesAsync(currentUser.UserPrincipalName, ct);
-        return roles.Contains("SystemAdmin", StringComparer.OrdinalIgnoreCase);
-    }
+    private Task<bool> IsSystemAdminAsync(CancellationToken ct)
+        => systemAuth.IsSystemAdminAsync(currentUser.UserPrincipalName, ct);
 
     /// <summary>Devuelve la política vigente. Cualquier usuario autenticado puede leerla
     /// (la necesita el formulario de creación de cuentas para validar en vivo).</summary>
