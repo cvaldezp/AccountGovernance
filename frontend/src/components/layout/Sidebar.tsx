@@ -94,11 +94,51 @@ function NavGroup({
   );
 }
 
+// Mismo patrón de lectura de env que el resto del frontend (agents/api) —
+// sin un tipado global de ImportMetaEnv dedicado.
+const env = (import.meta as { env?: Record<string, string | undefined> }).env ?? {};
+const MOCK_MODE = env['VITE_USE_MOCK_DATA'] === 'true';
+
+function AboutPanel() {
+  const buildDate = new Date(__BUILD_TIME__);
+  const buildLabel = Number.isNaN(buildDate.getTime())
+    ? __BUILD_TIME__
+    : buildDate.toLocaleString();
+
+  const rows: [string, string][] = [
+    ['Versión',   __APP_VERSION__],
+    ['Commit',    __GIT_COMMIT__],
+    ['Build',     buildLabel],
+    ['Ambiente',  import.meta.env.MODE],
+    ['Mock data', MOCK_MODE ? 'Sí' : 'No'],
+  ];
+
+  return (
+    <div style={{
+      margin:       '0 12px 8px',
+      padding:      '10px 12px',
+      borderRadius: '6px',
+      background:   'rgba(255,255,255,0.06)',
+      fontSize:     '11px',
+      lineHeight:   1.6,
+      color:        'rgba(255,255,255,0.75)',
+    }}>
+      {rows.map(([label, value]) => (
+        <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
+          <span style={{ opacity: 0.6 }}>{label}</span>
+          <span style={{ fontFamily: 'monospace' }}>{value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function Sidebar() {
   const { currentRoute, navigate } = useRouter();
   const { user } = useAuth();
   const isSystemAdmin  = user?.roles.includes('SystemAdmin') ?? false;
   const canAccessGroups = user?.roles.some(r => GROUPS_NAV_ROLES.includes(r)) ?? false;
+  const [showAbout, setShowAbout] = useState(false);
 
   const isActive = (key: RouteKey) =>
     currentRoute === key || (key === 'search' && currentRoute === 'user-detail');
@@ -162,8 +202,21 @@ export function Sidebar() {
         ))}
       </nav>
 
+      {showAbout && <AboutPanel />}
+
       <div className="sidebar-footer">
-        <span>v1.0.0 — Mock Mode</span>
+        <button
+          onClick={() => setShowAbout(v => !v)}
+          aria-expanded={showAbout}
+          title="Acerca de"
+          style={{
+            all:  'unset',
+            cursor: 'pointer',
+            fontFamily: 'monospace',
+          }}
+        >
+          v{__APP_VERSION__} · {__GIT_COMMIT__}
+        </button>
       </div>
     </aside>
   );
