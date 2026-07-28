@@ -54,6 +54,30 @@
   campo no está habilitado para esos roles en la Matriz de Permisos hoy.
   Sin errores, sin excepciones, sin impacto en la operación real.
 
+- **Validación adicional en vivo — los 5 motivos posibles, completa
+  (2026-07-28 15:29 a 16:23)**: se armó un caso real dedicado con el rol
+  `DragonHelp` (grupo AD `account-sd`), usando el campo "Oficina"
+  (`field-office`, `DragonHelp` sí tiene permiso de edición ahí) contra el
+  ámbito `prueba-funcional-estud-01` (filtro `extensionAttribute7 Equals
+  "Activado"`, mismo ejemplo de
+  `docs/pruebas-ambitos-roles-matriz-permisos.md`). Se registraron en el
+  Catálogo AD los pasos necesarios y se probaron los 3 estados posibles
+  del atributo del usuario objetivo:
+
+  | # | Estado de `extensionAttribute7` en `dusuariop` | Motivo obtenido | ¿Coincide con lo esperado? |
+  |---|---|---|---|
+  | 1 | Atributo no registrado en Catálogo AD (no se carga) | `SCOPE_ATTRIBUTE_UNAVAILABLE` | ✅ |
+  | 2 | Registrado y activo, valor distinto de `"Activado"` | `OUT_OF_SCOPE` | ✅ |
+  | 3 | Registrado y activo, valor `"Activado"` | `ROLE_MATCH`, `autorizadoPor=DragonHelp` | ✅ |
+
+  Sumado a `SYSTEM_ADMIN_BYPASS` y `FIELD_NOT_PERMITTED` ya confirmados
+  arriba, **quedaron validados en vivo, contra Active Directory real, los
+  5 motivos posibles del evaluador** — no solo contra los datos simulados
+  de los tests unitarios. En los 4 casos con `DragonHelp` la edición real
+  del campo se guardó siempre sin problemas, sin importar qué decía la
+  sombra — la garantía central del incremento quedó demostrada en
+  producción, no solo en código.
+
 ---
 
 A diferencia de A y B, este incremento **sí toca una operación real** — en
