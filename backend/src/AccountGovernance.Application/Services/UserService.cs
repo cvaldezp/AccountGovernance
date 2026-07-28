@@ -1,16 +1,21 @@
+using AccountGovernance.Application.Authorization;
 using AccountGovernance.Application.Common;
 using AccountGovernance.Application.DTOs;
 using AccountGovernance.Application.Interfaces;
 using AccountGovernance.Domain.Entities;
 using AccountGovernance.Domain.Enums;
+using Microsoft.Extensions.Logging;
 
 namespace AccountGovernance.Application.Services;
 
 public sealed class UserService(
-    IAdGateway             adGateway,
-    IPermissionRepository  permissionRepository,
-    IAuditRepository       auditRepository,
-    IFieldDefinitionsCache fieldDefinitionsCache) : IUserService
+    IAdGateway               adGateway,
+    IPermissionRepository    permissionRepository,
+    IAuditRepository         auditRepository,
+    IFieldDefinitionsCache   fieldDefinitionsCache,
+    ISystemAuthorizationService systemAuth,
+    IShadowFieldScopeEvaluator  shadowEvaluator,
+    ILogger<UserService>        logger) : IUserService
 {
     // Atributos LDAP que nunca deben escribirse a través del endpoint genérico de
     // atributos, sin importar lo que diga gov.FieldDefinitions o el rol del
@@ -120,6 +125,13 @@ public sealed class UserService(
         if (user is null)
             return Result<UpdateUserAttributeResultDto>.Fail(
                 $"Usuario '{samAccountName}' no encontrado en Active Directory.", "USER_NOT_FOUND");
+
+        // Incremento C — modo sombra, solo auditoría. El gate real ya corrió
+        // (CanEditFieldAsync, arriba) y ya decidió si esta operación sigue o no;
+        // esto nunca puede influir esa decisión ni la que sigue debajo. Reutiliza
+        // el `user` ya cargado — cero consultas LDAP adicionales. Cualquier
+        // excepción se contiene acá adentro, nunca se propaga.
+        await RunShadowEvaluationAsync(operatorUpn, fieldDef.FieldKey, user, ct);
 
         user.RawAttributes.TryGetValue(fieldDef.AdAttributeName, out var oldValue);
 
@@ -240,4 +252,35 @@ public sealed class UserService(
     }
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;
+
+    // Incremento C del Motor de Autorización — modo sombra, solo auditoría
+    // (docs/authorization-engine-increment-c-plan.md). Garantía obligatoria:
+    // ninguna excepción de acá puede propagarse ni afectar la operación real que
+    // ya se resolvió (o está por resolverse) en el método que llama a esto.
+    private async Task RunShadowEvaluationAsync(
+        string operatorUpn, string fieldKey, User targetUser, CancellationToken ct)
+    {
+        try
+        {
+            var effectiveRoles = await systemAuth.GetUserRolesAsync(operatorUpn, ct);
+            var decision = await shadowEvaluator.EvaluateAsync(
+                effectiveRoles, fieldKey, targetUser.RawAttributes, ct);
+
+            logger.LogInformation(
+                "[SHADOW-AUTH] operador={Operator} campo={FieldKey} objetivo={Target} " +
+                "resultado={Outcome} autorizadoPor={AuthorizedBy} detallePorRol={PerRole}",
+                operatorUpn, fieldKey, targetUser.SamAccountName,
+                decision.Outcome, decision.AuthorizedByRole ?? "(ninguno)",
+                string.Join("; ", decision.PerRole.Select(r =>
+                    $"{r.RoleKey}:campo={r.FieldAllowed}:ambito={r.ScopeAllowed}:motivo={r.Reason}")));
+        }
+        catch (Exception ex)
+        {
+            // Deliberado: se loguea y se ignora. El modo sombra nunca debe poder
+            // convertir una operación real exitosa en un error, ni viceversa.
+            logger.LogWarning(ex,
+                "[SHADOW-AUTH] la evaluación de sombra falló para operador={Operator} campo={FieldKey} — " +
+                "ignorado, no afecta la operación real.", operatorUpn, fieldKey);
+        }
+    }
 }

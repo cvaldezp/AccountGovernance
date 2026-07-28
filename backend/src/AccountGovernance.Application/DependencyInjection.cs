@@ -1,3 +1,4 @@
+using AccountGovernance.Application.Authorization;
 using AccountGovernance.Application.Interfaces;
 using AccountGovernance.Application.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,6 +9,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
+        services.AddScoped<IShadowFieldScopeEvaluator,        ShadowFieldScopeEvaluator>();
         services.AddScoped<IUserService,                     UserService>();
         services.AddScoped<IAuditService,                    AuditService>();
         services.AddScoped<IPermissionService,               PermissionService>();
