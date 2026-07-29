@@ -29,6 +29,7 @@ public sealed class UserServiceShadowEvaluationTests
         public Mock<IFieldDefinitionsCache>   FieldCache  { get; } = new();
         public Mock<ISystemAuthorizationService> SystemAuth { get; } = new();
         public Mock<IShadowFieldScopeEvaluator>  Shadow     { get; } = new();
+        public Mock<IScopeEnforcementPolicy>     ScopeEnforcement { get; } = new();
         public Mock<ILogger<UserService>>        Logger     { get; } = new();
 
         public Fixture()
@@ -64,11 +65,17 @@ public sealed class UserServiceShadowEvaluationTests
             SystemAuth
                 .Setup(s => s.GetUserRolesAsync(OperatorUpn, It.IsAny<CancellationToken>()))
                 .ReturnsAsync((IReadOnlyList<string>)["Registro"]);
+
+            // Por defecto, ningún rol tiene enforcement activo — reproduce
+            // exactamente el modo sombra puro del Incremento C para estas
+            // pruebas. Las pruebas de enforcement del Incremento D lo pisan
+            // explícitamente (ver UserServiceScopeEnforcementTests).
+            ScopeEnforcement.Setup(s => s.IsEnforced(It.IsAny<RoleName>())).Returns(false);
         }
 
         public UserService Build() => new(
             AdGateway.Object, Permissions.Object, Audit.Object, FieldCache.Object,
-            SystemAuth.Object, Shadow.Object, Logger.Object);
+            SystemAuth.Object, Shadow.Object, ScopeEnforcement.Object, Logger.Object);
     }
 
     private static UpdateUserAttributeDto Dto(string newValue) => new(newValue, "Valor Anterior");

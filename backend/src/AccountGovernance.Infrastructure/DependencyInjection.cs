@@ -1,5 +1,6 @@
 using AccountGovernance.Application.Interfaces;
 using AccountGovernance.Infrastructure.AdGateway;
+using AccountGovernance.Infrastructure.Authorization;
 using AccountGovernance.Infrastructure.Persistence;
 using AccountGovernance.Infrastructure.Persistence.Repositories;
 using AccountGovernance.Infrastructure.Services;
@@ -39,6 +40,11 @@ public static class DependencyInjection
         services.AddScoped<IAdministrativeScopeRepository, AdministrativeScopeRepository>();
         services.AddScoped<IAccountNamingPolicyRepository, AccountNamingPolicyRepository>();
         services.AddScoped<IRoleScopeAssignmentRepository, RoleScopeAssignmentRepository>();
+
+        // Incremento D — interruptor por rol para enforcement real de ámbito.
+        services.Configure<ScopeEnforcementOptions>(
+            configuration.GetSection(ScopeEnforcementOptions.Section));
+        services.AddSingleton<IScopeEnforcementPolicy, ScopeEnforcementPolicy>();
 
         return services;
     }

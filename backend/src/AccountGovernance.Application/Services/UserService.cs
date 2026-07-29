@@ -15,6 +15,7 @@ public sealed class UserService(
     IFieldDefinitionsCache   fieldDefinitionsCache,
     ISystemAuthorizationService systemAuth,
     IShadowFieldScopeEvaluator  shadowEvaluator,
+    IScopeEnforcementPolicy     scopeEnforcementPolicy,
     ILogger<UserService>        logger) : IUserService
 {
     // Atributos LDAP que nunca deben escribirse a través del endpoint genérico de
@@ -126,12 +127,13 @@ public sealed class UserService(
             return Result<UpdateUserAttributeResultDto>.Fail(
                 $"Usuario '{samAccountName}' no encontrado en Active Directory.", "USER_NOT_FOUND");
 
-        // Incremento C — modo sombra, solo auditoría. El gate real ya corrió
-        // (CanEditFieldAsync, arriba) y ya decidió si esta operación sigue o no;
-        // esto nunca puede influir esa decisión ni la que sigue debajo. Reutiliza
-        // el `user` ya cargado — cero consultas LDAP adicionales. Cualquier
-        // excepción se contiene acá adentro, nunca se propaga.
-        await RunShadowEvaluationAsync(operatorUpn, fieldDef.FieldKey, user, ct);
+        // Incremento C/D — evaluación de ámbito sobre el usuario ya cargado (cero
+        // consultas LDAP adicionales). Desde D, además de auditar, puede bloquear
+        // de verdad si effectiveRole tiene enforcement activo (interruptor por
+        // rol, docs/authorization-engine-increment-d-plan.md).
+        if (await RunShadowEvaluationAsync(operatorUpn, effectiveRole, fieldDef.FieldKey, user, ct))
+            return Result<UpdateUserAttributeResultDto>.Fail(
+                "No tienes permiso para editar este atributo.", "FORBIDDEN");
 
         user.RawAttributes.TryGetValue(fieldDef.AdAttributeName, out var oldValue);
 
@@ -253,34 +255,46 @@ public sealed class UserService(
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrEmpty(value) ? null : value;
 
-    // Incremento C del Motor de Autorización — modo sombra, solo auditoría
-    // (docs/authorization-engine-increment-c-plan.md). Garantía obligatoria:
-    // ninguna excepción de acá puede propagarse ni afectar la operación real que
-    // ya se resolvió (o está por resolverse) en el método que llama a esto.
-    private async Task RunShadowEvaluationAsync(
-        string operatorUpn, string fieldKey, User targetUser, CancellationToken ct)
+    // Incremento C/D del Motor de Autorización
+    // (docs/authorization-engine-increment-d-plan.md). Devuelve true cuando la
+    // operación debe bloquearse de verdad. Para un rol sin enforcement activo
+    // (scopeEnforcementPolicy.IsEnforced == false) esto se comporta exactamente
+    // igual que el modo sombra puro de C: nunca bloquea, cualquier excepción se
+    // contiene acá adentro y se ignora. Para un rol con enforcement activo,
+    // decisión.Denied bloquea, y una excepción también bloquea (fail-closed,
+    // Decisión 3 del plan de D) en vez de dejar pasar la operación real.
+    private async Task<bool> RunShadowEvaluationAsync(
+        string operatorUpn, RoleName effectiveRole, string fieldKey, User targetUser, CancellationToken ct)
     {
+        var enforced = scopeEnforcementPolicy.IsEnforced(effectiveRole);
+
         try
         {
             var effectiveRoles = await systemAuth.GetUserRolesAsync(operatorUpn, ct);
             var decision = await shadowEvaluator.EvaluateAsync(
                 effectiveRoles, fieldKey, targetUser.RawAttributes, ct);
+            var blocked = enforced && decision.Outcome == ShadowAuthorizationOutcome.Denied;
 
             logger.LogInformation(
                 "[SHADOW-AUTH] operador={Operator} campo={FieldKey} objetivo={Target} " +
-                "resultado={Outcome} autorizadoPor={AuthorizedBy} detallePorRol={PerRole}",
-                operatorUpn, fieldKey, targetUser.SamAccountName,
-                decision.Outcome, decision.AuthorizedByRole ?? "(ninguno)",
+                "rolPrimario={EffectiveRole} resultado={Outcome} autorizadoPor={AuthorizedBy} " +
+                "enforcement={Enforced} bloqueado={Blocked} detallePorRol={PerRole}",
+                operatorUpn, fieldKey, targetUser.SamAccountName, effectiveRole,
+                decision.Outcome, decision.AuthorizedByRole ?? "(ninguno)", enforced, blocked,
                 string.Join("; ", decision.PerRole.Select(r =>
                     $"{r.RoleKey}:campo={r.FieldAllowed}:ambito={r.ScopeAllowed}:motivo={r.Reason}")));
+
+            return blocked;
         }
         catch (Exception ex)
         {
-            // Deliberado: se loguea y se ignora. El modo sombra nunca debe poder
-            // convertir una operación real exitosa en un error, ni viceversa.
             logger.LogWarning(ex,
-                "[SHADOW-AUTH] la evaluación de sombra falló para operador={Operator} campo={FieldKey} — " +
-                "ignorado, no afecta la operación real.", operatorUpn, fieldKey);
+                "[SHADOW-AUTH] la evaluación de sombra falló para operador={Operator} campo={FieldKey} " +
+                "rolPrimario={EffectiveRole} enforcement={Enforced} — {Consequence}.",
+                operatorUpn, fieldKey, effectiveRole, enforced,
+                enforced ? "fail-closed, bloqueando la operación" : "ignorado, no afecta la operación real");
+
+            return enforced;
         }
     }
 }
