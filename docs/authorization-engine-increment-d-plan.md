@@ -37,10 +37,121 @@ roles:**
 | `RRHH`       | **No — cero asignaciones** | No | No |
 | `Registro`   | **No — cero asignaciones** | No | No |
 
-Es decir: la precondición **no está resuelta para 3 de los 4 roles**, y no
-por una laguna de evidencia sino porque la configuración de negocio
-todavía no existe para ellos. Un interruptor global bloquearía de
-inmediato todo lo que `Seguridades`, `RRHH` y `Registro` hacen hoy.
+**Actualización (2026-07-29)**, tras el deploy del paso 2 de validación de
+D: apareció en el log `[SHADOW-AUTH]` una operación real de
+`cwvaldezp@estud.usfq.edu.ec` — cuenta cuyo único rol efectivo confirmado
+es `RRHH` — editando `dusuariop`, con resultado `ROLE_MATCH`
+(`RRHH:campo=True:ambito=True`). Es decir, **`RRHH` sí tiene hoy al menos
+un `RoleScopeAssignment` real que matchea, y existe una cuenta de prueba
+dedicada de un solo rol para probarlo** — nadie lo había registrado
+explícitamente hasta este hallazgo casual. Fila actualizada:
+
+| Rol    | `RoleScopeAssignment` | Cuenta de prueba dedicada | Validación en vivo |
+|--------|:---:|:---:|:---:|
+| `RRHH` | Sí — `prueba-funcional-empleados-01`, filtro `userAccountControl Equals 512` | Sí — `cwvaldezp@estud.usfq.edu.ec` | **Completa — 4 de 4 resultados aplicables a un rol no-SystemAdmin** (`ROLE_MATCH`, `OUT_OF_SCOPE`, `NO_ACTIVE_SCOPE_ASSIGNED`, `SCOPE_ATTRIBUTE_UNAVAILABLE`; `SYSTEM_ADMIN_BYPASS` no aplica a `RRHH` por definición). Falta únicamente una ventana de uso real sin denegaciones inesperadas (criterio 4 de la Decisión 1) |
+
+Consultado directamente en la base de Development (solo lectura): la
+asignación real de `RRHH` es el ámbito `prueba-funcional-empleados-01`
+(`BaseDn=OU=Cloud,OU=ADMINISTRATIVE,OU=USERS,OU=Cumbaya,DC=usfq,DC=edu,DC=ec`),
+con un único filtro activo `userAccountControl Equals 512` (512 = cuenta
+habilitada normal). Campos editables por `RRHH`: Oficina
+(`physicalDeliveryOfficeName`), Teléfono (`telephoneNumber`), Cédula
+Identidad (`Custom-Cedula-Identidad`).
+
+**Segundo resultado confirmado en vivo (2026-07-29, 09:57:42)** —
+`OUT_OF_SCOPE` editando Teléfono sobre una cuenta deshabilitada
+(`asistenciafinanciera`):
+
+```
+[SHADOW-AUTH] operador=cwvaldezp@estud.usfq.edu.ec campo=field-telephone
+objetivo=asistenciafinanciera rolPrimario="RRHH" resultado="Denied"
+autorizadoPor=(ninguno) enforcement=false bloqueado=false
+detallePorRol=RRHH:campo=True:ambito=False:motivo=OUT_OF_SCOPE
+```
+
+`campo=True` + `ambito=False` → sombra deniega, pero con la lista vacía
+`enforcement=false`/`bloqueado=false` — la operación real siguió permitida
+(`AD attribute updated`, HTTP 200). Shadow-only confirmado también para
+este caso.
+
+**Tercer resultado confirmado en vivo (2026-07-29, 10:09:31)** — con la
+asignación de `RRHH` desactivada a propósito desde "Roles y Grupos",
+editando Oficina sobre el mismo usuario:
+
+```
+[SHADOW-AUTH] operador=cwvaldezp@estud.usfq.edu.ec campo=field-office
+objetivo=asistenciafinanciera rolPrimario="RRHH" resultado="Denied"
+autorizadoPor=(ninguno) enforcement=false bloqueado=false
+detallePorRol=RRHH:campo=True:ambito=False:motivo=NO_ACTIVE_SCOPE_ASSIGNED
+```
+
+Misma garantía: `enforcement=false`/`bloqueado=false`, escritura real
+permitida (`AD attribute updated — SAM: asistenciafinanciera, Attr:
+physicalDeliveryOfficeName`, HTTP 200). Asignación de `RRHH` reactivada
+tras la prueba (confirmado por consulta directa a la base:
+`AssignmentActive=1`) — no quedó ningún estado de prueba sin revertir.
+
+**Cuarto y último resultado aplicable confirmado en vivo (2026-07-29,
+10:32:55)** — se creó un ámbito temporal
+(`prueba-scope-attribute-unavailable-rrhh`, filtro sobre
+`extensionAttribute10`, un atributo nunca solicitado a AD — no está en
+`BaseDetailAttributes` ni registrado como `FieldDefinition` activo) y se
+asignó a `RRHH` **además** de la asignación real (sin desactivarla). Con
+`asistenciafinanciera` (ya fuera del ámbito real por `userAccountControl`)
+la evaluación cae al segundo ámbito:
+
+```
+[SHADOW-AUTH] operador=cwvaldezp@estud.usfq.edu.ec campo=field-telephone
+objetivo=asistenciafinanciera rolPrimario="RRHH" resultado="Denied"
+autorizadoPor=(ninguno) enforcement=false bloqueado=false
+detallePorRol=RRHH:campo=True:ambito=False:motivo=SCOPE_ATTRIBUTE_UNAVAILABLE
+```
+
+Misma garantía otra vez: `enforcement=false`/`bloqueado=false`, escritura
+real permitida (`AD attribute updated — SAM: asistenciafinanciera, Attr:
+telephoneNumber`, HTTP 200). **Con esto, `RRHH` completa los 4 de 4
+resultados posibles para un rol no-SystemAdmin.**
+
+**Prueba adicional — filtro personalizado con datos reales de negocio
+(2026-07-29, 12:13–12:15)**: para validar un caso más allá de los 5
+resultados del diseño, se buscó separar cuentas de staff vs. estudiantes.
+El sistema de filtros no soporta "contiene" (`ScopeFilterOperator` es
+cerrado: `Equals`/`NotEquals`/`In`/`Exists`), así que se buscó un atributo
+de valor discreto real — consulta LDAP de solo lectura confirmó que
+`company` vale `"USFQ"` para staff y `"ESTUD"` para estudiantes
+(ej. `asistenciafinanciera`→`USFQ`, `testestudiante`→`ESTUD`). Se aisló
+`RRHH` con una única asignación activa a un ámbito nuevo
+(`prueba-filtro-company-not-usfq`, filtro `company NotEquals "USFQ"`),
+desactivando temporalmente las otras dos. Ambos lados confirmados en vivo:
+
+```
+[SHADOW-AUTH] ... objetivo=testestudiante ... resultado="Permitted" ...
+detallePorRol=RRHH:campo=True:ambito=True:motivo=ROLE_MATCH
+(company=ESTUD, NotEquals "USFQ" es verdadero)
+
+[SHADOW-AUTH] ... objetivo=asistenciafinanciera ... resultado="Denied" ...
+detallePorRol=RRHH:campo=True:ambito=False:motivo=OUT_OF_SCOPE
+(company=USFQ, NotEquals "USFQ" es falso)
+```
+
+Ambas escrituras reales se completaron igual (`enforcement=false`), shadow-
+only intacto. Esto no es uno de los 5 resultados del diseño — es evidencia
+adicional de que el sistema de filtros ya cerrado (Incremento B) funciona
+correctamente con datos reales de negocio, más allá de los ejemplos
+sintéticos usados hasta ahora.
+
+**Limpieza aplicada (2026-07-29)** — confirmada por consulta directa a la
+base (`UPDATE` dirigido por `Id`, no por la UI): `prueba-funcional-
+empleados-01` (Id 3) reactivada, `prueba-scope-attribute-unavailable-rrhh`
+(Id 4) y `prueba-filtro-company-not-usfq` (Id 5) quedaron inactivas — no
+eliminadas, consistente con el criterio de que `RoleScopeAssignment` nunca
+se borra. Estado real de `RRHH` restaurado, sin residuos de prueba activos.
+
+`Seguridades` y `Registro` siguen sin evidencia. La precondición sigue
+**no resuelta para 2 de los 4 roles** (antes 3) — y no por una laguna de
+evidencia sino porque la configuración de negocio todavía no existe para
+ellos. Un interruptor global bloquearía de inmediato todo lo que
+`Seguridades` y `Registro` hacen hoy.
 
 Además, confirmamos una limitación metodológica: la cuenta de pruebas del
 propio administrador pertenece simultáneamente a todos los grupos de AD
@@ -98,10 +209,15 @@ propiedad central del interruptor original, solo cambia la forma
 
 **Alcance inicial de activación (cuando se decida activar, fuera de este
 incremento): únicamente `DragonHelp`.** Es el único rol con evidencia
-completa hoy — `RoleScopeAssignment` real, cuenta de prueba dedicada, y
-los 5 resultados posibles ya validados en vivo (Incremento C). Los otros
-tres roles quedan en modo sombra (auditan, nunca bloquean) hasta que
-cumplan, cada uno, estos criterios:
+**completa** hoy — `RoleScopeAssignment` real, cuenta de prueba dedicada, y
+los 5 resultados posibles ya validados en vivo (Incremento C). `RRHH`
+avanzó parcialmente (2026-07-29): tiene cuenta de prueba dedicada
+(`cwvaldezp@estud.usfq.edu.ec`) y al menos un `RoleScopeAssignment` real
+con `ROLE_MATCH` confirmado en vivo, pero todavía le faltan los otros 4
+resultados posibles y una ventana de uso real sin denegaciones inesperadas
+— no cumple el criterio 4 todavía, así que sigue en modo sombra por ahora.
+`Seguridades` y `Registro` quedan en modo sombra (auditan, nunca bloquean)
+hasta que cumplan, cada uno, estos criterios:
 
 1. `RoleScopeAssignment` configurado y revisado con quien administra ese
    rol funcionalmente (no solo "existe una fila", sino que cubre
@@ -380,6 +496,36 @@ Implementado exactamente según lo aprobado, sin desviaciones de diseño.
   `IAdGateway` (`CreateUserAsync`, `AddUserToGroupAsync`, listas de
   distribución, etc.) son operaciones estructuralmente distintas, ya
   excluidas del alcance de D.
-- Deploy a Development y activación de `DragonHelp` en la lista: **no
-  ejecutados todavía** — quedan como pasos operativos separados y
-  posteriores, según las Decisiones 4 y la sección Validación de arriba.
+- Deploy a Development (paso 2 de la validación, lista vacía): **ejecutado
+  el 2026-07-28**. `dotnet test` corrido por el propio script de deploy en
+  Release: 94/94. Publish, robocopy y health checks (`/api/health` y
+  frontend) en HTTP 200. `appsettings.Development.json` del servidor
+  preservado y restaurado sin cambios — confirmado en el log del script.
+  `git status` local limpio antes y después.
+- Activación de `DragonHelp` en la lista (paso 3): **no ejecutada
+  todavía** — sigue como paso operativo separado y posterior, según la
+  Decisión 4.
+
+**Límite de validación aceptado explícitamente (2026-07-29):** se
+planteó si convenía construir algún mecanismo para probar el bloqueo real
+con `Seguridades`/`RRHH`/`Registro` sin depender de cuentas de AD
+dedicadas para cada rol (la cuenta del propio operador resuelve siempre
+como `SystemAdmin`, por prioridad — no sirve para esto). Se evaluaron tres
+opciones: (a) un endpoint de simulación de solo lectura, SystemAdmin-only,
+que invoque `ShadowFieldScopeEvaluator` directamente con un rol arbitrario
+sin pasar por el gate real ni tocar AD; (b) gestionar cuentas de prueba en
+AD directamente si hay permisos delegados sobre los grupos de
+`gov.SystemRoleGroups`; (c) aceptar el límite actual y confiar en la
+cobertura de pruebas unitarias ya existente.
+
+**Decisión: se elige (c).** Los 94 tests unitarios (en particular los 9
+casos de `UserServiceScopeEnforcementTests`, que ejercitan
+`UpdateAttributeAsync` completo con distintos `effectiveRole` y distintas
+respuestas de `IScopeEnforcementPolicy`/`IShadowFieldScopeEvaluator`) ya
+prueban de forma determinística la lógica de los 10 casos del incremento
+para cualquier rol. Lo que queda pendiente es exclusivamente la
+**validación end-to-end en vivo** (HTTP real vía IIS/AD) para
+`Seguridades`, `RRHH` y `Registro` — y eso se resuelve únicamente cuando
+existan cuentas de prueba dedicadas para esos roles (mismo criterio 3 de
+la Decisión 1), no con un atajo de código. Sin cambios de alcance sobre
+el incremento ya implementado.
