@@ -147,6 +147,99 @@ empleados-01` (Id 3) reactivada, `prueba-scope-attribute-unavailable-rrhh`
 eliminadas, consistente con el criterio de que `RoleScopeAssignment` nunca
 se borra. Estado real de `RRHH` restaurado, sin residuos de prueba activos.
 
+## Paso 3 completado — enforcement real activado y probado en vivo (2026-07-29)
+
+Con la precondición de `RRHH` resuelta (4/4 resultados + evidencia extra),
+se decidió agregar `RRHH` a `EnforceScopeOnUpdateAttributeRoles` en el
+servidor de Development para cerrar la última pieza pendiente del
+incremento: probar el **bloqueo real**, no solo el log de sombra.
+
+**Cambio aplicado**: `appsettings.Development.json` del servidor editado
+directamente (agregada la sección `Authorization.
+EnforceScopeOnUpdateAttributeRoles: ["RRHH"]`), seguido de un reciclado
+del App Pool `account-governance-int` — necesario porque
+`IScopeEnforcementPolicy` es `Singleton` y normaliza la configuración una
+sola vez al arrancar; el archivo por sí solo no alcanza sin reciclar.
+`appsettings.json` del repo (versionado) **no se tocó** — sigue en `[]`,
+tal como exige la Decisión 4; este es un cambio operativo directo en el
+servidor, no un commit.
+
+**Los 3 comportamientos reales confirmados con `cwvaldezp` (única cuenta
+real de `RRHH`)**:
+
+| Caso | Resultado sombra | HTTP real | Escritura en AD |
+|---|---|---|---|
+| `ROLE_MATCH` (`dusuariop`, Oficina) | Permitted | `200` | Sí — `AD attribute updated` |
+| `OUT_OF_SCOPE` (`asistenciafinanciera`, Oficina) | Denied | **`403`** | **No** |
+| `OUT_OF_SCOPE` (`asistenciafinanciera`, Teléfono) | Denied | **`403`** | **No** |
+
+Log real del primer bloqueo:
+
+```
+[SHADOW-AUTH] operador=cwvaldezp@estud.usfq.edu.ec campo=field-office
+objetivo=asistenciafinanciera rolPrimario="RRHH" resultado="Denied"
+autorizadoPor=(ninguno) enforcement=true bloqueado=true
+detallePorRol=RRHH:campo=True:ambito=False:motivo=OUT_OF_SCOPE
+...
+HTTP PATCH /users/asistenciafinanciera/attributes/physicalDeliveryOfficeName responded 403
+```
+
+Sin ninguna línea `AD attribute updated` para los dos casos bloqueados —
+confirmado que el bloqueo ocurrió antes de tocar Active Directory, no
+después. El log también confirmó, de paso, que `cwvaldezp` resuelve con
+un único rol efectivo (`roles resueltos para cwvaldezp@...: [RRHH]`),
+validando la cuenta de prueba de un solo rol una vez más.
+
+**No se probó explícitamente el bypass de `SystemAdmin` con enforcement
+activo en este servidor** — ya está cubierto por el diseño (el bypass es
+incondicional, independiente de la lista) y por 2 pruebas: el caso 2 de
+`UserServiceScopeEnforcementTests` (unitario) y la validación en vivo
+completa de Incremento C. Se consideró suficiente, no se repitió en vivo
+para no arriesgar la cuenta de administrador en un ambiente compartido.
+
+**Con esto, el Incremento D queda validado de punta a punta: shadow-only
+(interruptor apagado) y enforcement real (interruptor encendido para
+`RRHH`), ambos en el servidor real, con logs reales.**
+
+## Decisión operativa: RRHH queda con enforcement activo (2026-07-29)
+
+Con las 3 pruebas en vivo confirmadas, se decidió **dejar `RRHH` activo**
+en `EnforceScopeOnUpdateAttributeRoles` de Development en vez de revertir
+a `[]` después de probar. Estado final del servidor:
+
+```json
+{
+  "Authorization": {
+    "EnforceScopeOnUpdateAttributeRoles": [ "RRHH" ]
+  }
+}
+```
+
+Esto es, en la práctica, la primera activación real de enforcement de
+todo el Motor de Autorización — antes solo `DragonHelp` tenía evidencia
+completa, pero nunca se había llegado a activar el bloqueo de verdad para
+ningún rol. Consecuencias a tener presentes:
+
+- Cualquier operación de `RRHH` sobre una cuenta deshabilitada (o sin
+  ámbito activo, o con el atributo del filtro no disponible) **ahora
+  recibe un 403 real**, no solo queda auditada. Esto ya no es un
+  experimento aislado — es el comportamiento vigente del sistema para
+  este rol.
+- El despliegue del script (`Deploy-AccountGovernance-Development.ps1`)
+  preserva `appsettings.Development.json` del servidor sin sobrescribirlo
+  — un futuro deploy **no revierte esto**, sigue activo salvo que alguien
+  lo cambie explícitamente.
+- `DragonHelp` sigue en modo sombra únicamente — tiene evidencia completa
+  desde Incremento C, pero no se decidió activarlo todavía en esta sesión.
+- `Seguridades` y `Registro` siguen sin ningún ámbito ni cuenta de prueba
+  — siguen en modo sombra por la razón original (precondición no resuelta),
+  no por elección.
+- El criterio 4 de la Decisión 1 ("ventana de uso real sin denegaciones
+  inesperadas") queda efectivamente en curso a partir de ahora para
+  `RRHH`, con el enforcement ya activo — vale la pena revisar los logs de
+  `[SHADOW-AUTH]` de `RRHH` periódicamente por un tiempo para confirmar
+  que no aparecen denegaciones inesperadas en el uso real.
+
 `Seguridades` y `Registro` siguen sin evidencia. La precondición sigue
 **no resuelta para 2 de los 4 roles** (antes 3) — y no por una laguna de
 evidencia sino porque la configuración de negocio todavía no existe para
