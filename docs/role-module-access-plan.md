@@ -1,8 +1,9 @@
 # Accesos por Rol a Módulos y Acciones — Plan
 
-> Estado: **aprobado (2026-10-07). Fase 1 implementada** (pendiente de
-> aplicar `schema.sql` en Development y validar en vivo). Fases 2 y 3
-> pendientes.
+> Estado: **aprobado (2026-10-07). Fase 1 desplegada y validada en vivo en
+> Development** (SystemAdmin ve todo; RRHH ve solo Dashboard, Buscar Usuario y
+> Creación de Cuentas). **Fase 2 implementada**, pendiente de desplegar.
+> Fase 3 pendiente.
 > Decisiones tomadas por el usuario funcional:
 > - El permiso controla **menú + pantalla + API** (una sola fuente de verdad).
 > - Granularidad **módulos + acciones**.
@@ -199,7 +200,7 @@ pisa un cambio hecho después desde la pantalla.
 1. ✅ **Modelo + seed + servicio + `/auth/me` + frontend leyendo `permissions`.**
    La restricción ya se ve en el menú y en las pantallas (seed restringido),
    pero la API todavía no la exige — se cierra en la fase 3.
-2. **Pantalla Accesos por Rol** (CRUD + auditoría) **+ alta de roles nuevos
+2. ✅ **Pantalla Accesos por Rol** (CRUD + auditoría) **+ alta de roles nuevos
    desde "Roles y Grupos"** (aprobado 2026-10-07).
 3. **Enforcement en backend** con `[RequireResource]`, endpoint por
    endpoint, con tests de gate por controller (patrón
@@ -219,7 +220,7 @@ un usuario = los `RoleKey` activos cuyos grupos contienen al usuario en AD.
   todos sus roles (no solo los del rol primario).
 
 Bloqueos actuales para un rol nuevo, fuera de este modelo:
-1. **No existe alta de roles desde la UI**: `SystemRolesController` solo
+1. ✅ *(resuelto en fase 2: "+ Nuevo rol")* **No existía alta de roles desde la UI**: `SystemRolesController` solo
    edita roles existentes y sus grupos; un rol nuevo requiere `INSERT`
    manual en `gov.SystemRoles`.
 2. **El frontend fija los 5 roles** (`VALID_ROLES` en
@@ -268,3 +269,34 @@ pantallas de Configuración siguen mostrando controles de edición solo a
 SystemAdmin — delegar un módulo de Configuración desde la pantalla de la
 fase 2 no tendrá efecto real hasta la fase 3.
 
+## Fase 2 — implementado (2026-10-07)
+
+Backend:
+- `RoleAccessController`: `GET /role-access` (roles activos × recursos
+  activos + celdas otorgadas) y `PUT /role-access/{roleKey}/{resourceKey}`
+  (`{ granted }`). Gate SystemAdmin.
+- `RoleResourceAdminService.SetAccessAsync`: rechaza rol inexistente o
+  inactivo, SystemAdmin (`SYSTEM_ADMIN_FIXED`), recurso no delegable
+  (`NOT_DELEGABLE`), inactivo/inexistente y cambios sin efecto
+  (`NO_STATE_CHANGE`). Primera vez = INSERT; después solo `IsActive`.
+  Invalida el caché y audita `RoleResourceGranted`/`RoleResourceRevoked`.
+- Alta de roles: `POST /system-roles` (`SystemRoleService.CreateAsync`),
+  clave `^[A-Za-z][A-Za-z0-9_-]{1,99}$`, sin duplicados; el rol nace activo,
+  sin grupos AD ni accesos. Audita `SystemRoleCreated`.
+- 12 tests nuevos (`RoleResourceAdminServiceTests` + gate de `Create`). 133/133.
+
+Frontend:
+- Configuración → **Accesos por Rol** (`modules/role-access/`): matriz
+  módulos (con acciones anidadas) × roles, una celda por clic con
+  actualización optimista. SystemAdmin = "Siempre"; no delegables =
+  "Solo SystemAdmin"; una acción sin su módulo se muestra "Sin módulo"
+  (otorgada pero sin efecto) o bloqueada hasta otorgar el módulo.
+- Roles y Grupos: botón **+ Nuevo rol** (modal).
+- Auditoría: etiquetas para las 3 acciones nuevas.
+
+Los cambios de accesos se ven en el próximo `/auth/me` del usuario
+(recargar o volver a iniciar sesión).
+
+## Siguiente paso
+
+Fase 3: enforcement en la API con `[RequireResource]`, endpoint por endpoint.
