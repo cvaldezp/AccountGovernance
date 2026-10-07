@@ -274,40 +274,50 @@ END
 GO
 
 -- ── Migration: fix all config values for existing installs ───────────────────
+-- Solo corrige filas que NUNCA se editaron desde la pantalla "Tipos de Cuenta"
+-- (UpdatedBy IS NULL): AccountTypeRepository.UpdateConfigAsync siempre llena
+-- UpdatedBy al guardar. Antes estos UPDATE eran incondicionales y re-ejecutar
+-- schema.sql revertía cualquier cambio hecho desde la pantalla (corregido
+-- 2026-10-07). Regla de este archivo: re-ejecutarlo nunca pisa ni borra datos.
 
 UPDATE gov.AccountTypeConfigurations
 SET    ExtensionAttribute14 = N'Genérica',
        DescriptionTemplate  = N'Genérica',
        DefaultCompany       = N'USFQ'
-WHERE  AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'GENERIC');
+WHERE  AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'GENERIC')
+  AND  UpdatedBy IS NULL;
 GO
 
 UPDATE gov.AccountTypeConfigurations
 SET    ExtensionAttribute14 = 'PARTNERS',
        DescriptionTemplate  = 'PARTNERS',
        DefaultCompany       = N'USFQ'
-WHERE  AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'PARTNER');
+WHERE  AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'PARTNER')
+  AND  UpdatedBy IS NULL;
 GO
 
 UPDATE gov.AccountTypeConfigurations
 SET    ExtensionAttribute14 = 'SERVICES',
        DescriptionTemplate  = 'SERVICES',
        DefaultCompany       = N'USFQ'
-WHERE  AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'SERVICE');
+WHERE  AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'SERVICE')
+  AND  UpdatedBy IS NULL;
 GO
 
 UPDATE gov.AccountTypeConfigurations
 SET    ExtensionAttribute14 = 'EXTENSION',
        DescriptionTemplate  = 'EXTENSION',
        DefaultCompany       = N'USFQ'
-WHERE  AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'EXTENSION');
+WHERE  AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'EXTENSION')
+  AND  UpdatedBy IS NULL;
 GO
 
 UPDATE gov.AccountTypeConfigurations
 SET    ExtensionAttribute14 = 'PRIVILEGED',
        DescriptionTemplate  = 'PRIVILEGED',
        DefaultCompany       = N'USFQ'
-WHERE  AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'PRIVILEGED');
+WHERE  AccountTypeId = (SELECT Id FROM gov.AccountTypes WHERE TypeKey = 'PRIVILEGED')
+  AND  UpdatedBy IS NULL;
 GO
 
 -- ── 7. Seed: account sub-types (PRIVILEGED only) ─────────────────────────────
