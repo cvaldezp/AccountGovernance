@@ -1068,3 +1068,150 @@ FROM   sys.indexes
 WHERE  object_id = OBJECT_ID('gov.RoleScopeAssignments')
   AND  is_unique = 1;
 GO
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Accesos por Rol a módulos y acciones — ver docs/role-module-access-plan.md.
+--
+-- gov.AppResources: catálogo de módulos/acciones del portal. Lo define el
+-- código (cada recurso corresponde a una pantalla/endpoint real) y se siembra
+-- acá — no se edita desde la UI. SystemAdminOnly = no delegable: define la
+-- autorización de otros roles (escalada de privilegios si se delega).
+--
+-- gov.RoleResourcePermissions: qué rol tiene cada recurso. FK real a
+-- gov.SystemRoles (un rol nuevo aparece sin ningún permiso — fail-closed).
+-- Mismo modelo que RoleScopeAssignments: una fila por par en toda su vida,
+-- sin DELETE, revocar = IsActive=0.
+--
+-- SystemAdmin no tiene filas: tiene todos los recursos siempre, sin consultar
+-- esta tabla (mismo bypass que el resto del Motor de Autorización).
+-- ═══════════════════════════════════════════════════════════════════════════
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.tables t
+    JOIN sys.schemas s ON t.schema_id = s.schema_id
+    WHERE t.name = 'AppResources' AND s.name = 'gov'
+)
+BEGIN
+    CREATE TABLE gov.AppResources (
+        ResourceKey      NVARCHAR(100) NOT NULL PRIMARY KEY,
+        ParentKey        NVARCHAR(100) NULL,
+        ResourceType     NVARCHAR(20)  NOT NULL,   -- Module | Action | Tab
+        DisplayName      NVARCHAR(200) NOT NULL,
+        Description      NVARCHAR(500) NULL,
+        SortOrder        INT           NOT NULL DEFAULT 0,
+        SystemAdminOnly  BIT           NOT NULL DEFAULT 0,
+        IsActive         BIT           NOT NULL DEFAULT 1,
+        CONSTRAINT FK_Gov_AppResources_Parent FOREIGN KEY (ParentKey)
+            REFERENCES gov.AppResources(ResourceKey),
+        CONSTRAINT CK_Gov_AppResources_Type CHECK (ResourceType IN ('Module', 'Action', 'Tab'))
+    );
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.tables t
+    JOIN sys.schemas s ON t.schema_id = s.schema_id
+    WHERE t.name = 'RoleResourcePermissions' AND s.name = 'gov'
+)
+BEGIN
+    CREATE TABLE gov.RoleResourcePermissions (
+        Id            INT           NOT NULL IDENTITY(1,1) PRIMARY KEY,
+        SystemRoleId  INT           NOT NULL,
+        ResourceKey   NVARCHAR(100) NOT NULL,
+        IsActive      BIT           NOT NULL DEFAULT 1,
+        CreatedAt     DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+        CreatedBy     NVARCHAR(200) NULL,
+        UpdatedAt     DATETIME2     NOT NULL DEFAULT GETUTCDATE(),
+        UpdatedBy     NVARCHAR(200) NULL,
+        CONSTRAINT FK_Gov_RoleResourcePermissions_Role FOREIGN KEY (SystemRoleId)
+            REFERENCES gov.SystemRoles(Id),
+        CONSTRAINT FK_Gov_RoleResourcePermissions_Resource FOREIGN KEY (ResourceKey)
+            REFERENCES gov.AppResources(ResourceKey),
+        CONSTRAINT UQ_Gov_RoleResourcePermissions_Pair UNIQUE (SystemRoleId, ResourceKey)
+    );
+
+    CREATE INDEX IX_Gov_RoleResourcePermissions_RoleId ON gov.RoleResourcePermissions (SystemRoleId);
+END
+GO
+
+-- Seed: catálogo de recursos (idempotente — solo inserta claves que faltan;
+-- nunca pisa cambios posteriores). Módulos primero: las acciones referencian
+-- a su módulo padre por FK.
+DECLARE @Resources TABLE (
+    ResourceKey NVARCHAR(100), ParentKey NVARCHAR(100), ResourceType NVARCHAR(20),
+    DisplayName NVARCHAR(200), Description NVARCHAR(500), SortOrder INT, SystemAdminOnly BIT);
+
+INSERT INTO @Resources VALUES
+    ('dashboard',                         NULL,                       'Module', N'Dashboard',               N'Resumen general del portal.',                          10,  0),
+    ('users',                             NULL,                       'Module', N'Buscar Usuario',          N'Buscar usuarios y ver su perfil. Editar atributos o el estado de la cuenta se controla en la Matriz de Permisos.', 20, 0),
+    ('account-creation',                  NULL,                       'Module', N'Creación de Cuentas',     N'Ver tipos de cuenta y previsualizar una cuenta nueva.', 30,  0),
+    ('account-creation.create',           'account-creation',         'Action', N'Crear cuenta',            N'Crear la cuenta en Active Directory.',                 31,  0),
+    ('audit',                             NULL,                       'Module', N'Auditoría',               N'Historial de acciones de todos los operadores.',       40,  0),
+    ('distribution-lists',                NULL,                       'Module', N'Listas de Distribución',  N'Buscar listas y ver sus miembros.',                    50,  0),
+    ('distribution-lists.manage-members', 'distribution-lists',       'Action', N'Agregar/quitar miembros', N'Modificar la membresía de una lista.',                 51,  0),
+    ('config.attribute-catalog',          NULL,                       'Module', N'Catálogo AD',             N'Ver los atributos AD gestionados por el portal.',      100, 0),
+    ('config.attribute-catalog.edit',     'config.attribute-catalog', 'Action', N'Editar catálogo',         N'Crear, editar, activar o inactivar atributos.',        101, 0),
+    ('config.account-types',              NULL,                       'Module', N'Tipos de Cuenta',         N'Ver la configuración de tipos de cuenta.',             110, 0),
+    ('config.account-types.edit',         'config.account-types',     'Action', N'Editar tipos de cuenta',  N'Modificar tipos y subtipos de cuenta.',                111, 0),
+    ('config.initial-groups',             NULL,                       'Module', N'Grupos Iniciales',        N'Ver los grupos iniciales por tipo de cuenta.',         120, 0),
+    ('config.initial-groups.edit',        'config.initial-groups',    'Action', N'Editar grupos iniciales', N'Agregar, editar o quitar grupos iniciales.',           121, 0),
+    ('config.permissions-matrix',         NULL,                       'Module', N'Matriz de Permisos',      N'Permisos de campo por rol. Solo SystemAdmin.',         130, 1),
+    ('config.system-roles',               NULL,                       'Module', N'Roles y Grupos',          N'Roles del portal y sus grupos AD. Solo SystemAdmin.', 140, 1),
+    ('config.administrative-scopes',      NULL,                       'Module', N'Ámbitos Administrativos', N'Ámbitos y su asignación a roles. Solo SystemAdmin.',   150, 1),
+    ('config.role-access',                NULL,                       'Module', N'Accesos por Rol',         N'Esta configuración de accesos. Solo SystemAdmin.',    160, 1);
+
+INSERT INTO gov.AppResources (ResourceKey, ParentKey, ResourceType, DisplayName, Description, SortOrder, SystemAdminOnly)
+SELECT r.ResourceKey, r.ParentKey, r.ResourceType, r.DisplayName, r.Description, r.SortOrder, r.SystemAdminOnly
+FROM   @Resources r
+WHERE  r.ParentKey IS NULL
+  AND  NOT EXISTS (SELECT 1 FROM gov.AppResources a WHERE a.ResourceKey = r.ResourceKey);
+
+INSERT INTO gov.AppResources (ResourceKey, ParentKey, ResourceType, DisplayName, Description, SortOrder, SystemAdminOnly)
+SELECT r.ResourceKey, r.ParentKey, r.ResourceType, r.DisplayName, r.Description, r.SortOrder, r.SystemAdminOnly
+FROM   @Resources r
+WHERE  r.ParentKey IS NOT NULL
+  AND  NOT EXISTS (SELECT 1 FROM gov.AppResources a WHERE a.ResourceKey = r.ResourceKey);
+GO
+
+-- Seed: matriz inicial restringida, aprobada el 2026-10-07 (ver plan). Solo
+-- inserta pares (rol, recurso) que no existen — activos o inactivos —, así
+-- que re-ejecutar el script nunca revierte un cambio hecho desde la pantalla.
+-- Roles inexistentes en gov.SystemRoles se ignoran (JOIN).
+DECLARE @Grants TABLE (RoleKey NVARCHAR(100), ResourceKey NVARCHAR(100));
+
+INSERT INTO @Grants VALUES
+    ('Seguridades', 'dashboard'), ('Seguridades', 'users'),
+    ('Seguridades', 'account-creation'), ('Seguridades', 'account-creation.create'),
+    ('Seguridades', 'audit'),
+    ('Seguridades', 'distribution-lists'), ('Seguridades', 'distribution-lists.manage-members'),
+
+    ('RRHH', 'dashboard'), ('RRHH', 'users'),
+    ('RRHH', 'account-creation'), ('RRHH', 'account-creation.create'),
+
+    ('Registro', 'dashboard'), ('Registro', 'users'),
+    ('Registro', 'account-creation'), ('Registro', 'account-creation.create'),
+    ('Registro', 'distribution-lists'),
+
+    ('DragonHelp', 'dashboard'), ('DragonHelp', 'users'),
+    ('DragonHelp', 'distribution-lists');
+
+INSERT INTO gov.RoleResourcePermissions (SystemRoleId, ResourceKey, IsActive, CreatedBy, UpdatedBy)
+SELECT sr.Id, g.ResourceKey, 1, N'schema.sql (seed inicial Accesos por Rol)', N'schema.sql (seed inicial Accesos por Rol)'
+FROM   @Grants g
+JOIN   gov.SystemRoles  sr ON sr.RoleKey     = g.RoleKey
+JOIN   gov.AppResources ar ON ar.ResourceKey = g.ResourceKey AND ar.SystemAdminOnly = 0
+WHERE  NOT EXISTS (
+    SELECT 1 FROM gov.RoleResourcePermissions p
+    WHERE  p.SystemRoleId = sr.Id AND p.ResourceKey = g.ResourceKey
+);
+GO
+
+-- Verificación (para que un DBA confirme manualmente el resultado):
+SELECT COUNT(*) AS AppResources_Count FROM gov.AppResources;   -- 17
+SELECT sr.RoleKey, COUNT(*) AS Grants
+FROM   gov.RoleResourcePermissions p
+JOIN   gov.SystemRoles sr ON sr.Id = p.SystemRoleId
+WHERE  p.IsActive = 1
+GROUP  BY sr.RoleKey
+ORDER  BY sr.RoleKey;   -- DragonHelp 3, RRHH 4, Registro 5, Seguridades 7
+GO

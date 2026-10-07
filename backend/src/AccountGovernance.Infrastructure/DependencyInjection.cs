@@ -40,6 +40,8 @@ public static class DependencyInjection
         services.AddScoped<IAdministrativeScopeRepository, AdministrativeScopeRepository>();
         services.AddScoped<IAccountNamingPolicyRepository, AccountNamingPolicyRepository>();
         services.AddScoped<IRoleScopeAssignmentRepository, RoleScopeAssignmentRepository>();
+        services.AddScoped<IRoleResourceRepository,        RoleResourceRepository>();
+        services.AddScoped<IRoleResourceCatalogCache,      RoleResourceCatalogCache>();
 
         // Incremento D — interruptor por rol para enforcement real de ámbito.
         services.Configure<ScopeEnforcementOptions>(

@@ -1,7 +1,8 @@
 # Accesos por Rol a Módulos y Acciones — Plan
 
-> Estado: **decisiones de diseño aprobadas (2026-10-07); falta aprobar la
-> matriz inicial restringida** (sección "Siembra inicial"). Sin implementar.
+> Estado: **aprobado (2026-10-07). Fase 1 implementada** (pendiente de
+> aplicar `schema.sql` en Development y validar en vivo). Fases 2 y 3
+> pendientes.
 > Decisiones tomadas por el usuario funcional:
 > - El permiso controla **menú + pantalla + API** (una sola fuente de verdad).
 > - Granularidad **módulos + acciones**.
@@ -123,14 +124,14 @@ Reglas:
 - `Tab` queda soportado en el modelo; hoy no existe ninguna pestaña en el
   portal, así que el catálogo inicial no tiene ninguna.
 
-## Siembra inicial — restringida (pendiente de aprobación)
+## Siembra inicial — restringida (aprobada 2026-10-07)
 
 Decisión: el sistema arranca restringido. **Propuesta** de matriz inicial
 (✔ = otorgado; SystemAdmin no aparece porque tiene todo siempre). Las
 responsabilidades de cada rol no están documentadas en el repo; esta
-propuesta se deduce de la configuración real (`RoleFieldPermissions`,
-`DistributionListsController`, descripciones de `gov.SystemRoles`) y debe
-confirmarla el usuario funcional:
+propuesta se dedujo de la configuración real (`RoleFieldPermissions`,
+`DistributionListsController`, descripciones de `gov.SystemRoles`) y el
+usuario funcional la aprobó sin cambios:
 
 | Recurso | Seguridades | RRHH | Registro | DragonHelp |
 |---|:-:|:-:|:-:|:-:|
@@ -171,8 +172,9 @@ pisa un cambio hecho después desde la pantalla.
   `ReadRoles`/`WriteRoles` fijos de `DistributionListsController` y los
   `IsSystemAdminAsync` manuales de Configuración (estos últimos solo por
   consistencia — su resultado es idéntico).
-- `GET /auth/me` agrega `resources: string[]` (claves permitidas al usuario
-  actual). El frontend no vuelve a calcular permisos por su cuenta.
+- `GET /auth/me` devuelve las claves permitidas en `permissions: string[]`
+  (campo que ya existía en `MeResponseDto`, reservado y siempre vacío hasta
+  ahora). El frontend no vuelve a calcular permisos por su cuenta.
 - CRUD admin (`config.role-access`, SystemAdmin): `GET /role-access`
   (matriz roles × recursos), `PUT /role-access/{roleKey}/{resourceKey}`
   (`{ isActive }`). Cada cambio se audita en `gov.AuditEntries`
@@ -182,8 +184,8 @@ pisa un cambio hecho después desde la pantalla.
 ## Frontend
 
 - `routeAccess.ts`: `ROUTE_ACCESS` pasa de lista de roles a
-  `RouteKey → ResourceKey`; `canAccessRoute` consulta `user.resources`
-  (de `/auth/me`). Sidebar y `RouterView` no cambian de forma.
+  `RouteKey → ResourceKey` (`ROUTE_RESOURCE`); `canAccessRoute` consulta
+  `user.permissions` (de `/auth/me`). Sidebar y `RouterView` no cambian de forma.
 - Hook `useCan(resourceKey)` para ocultar acciones (ej. botón "Crear
   cuenta", "Agregar miembro").
 - Pantalla nueva **Configuración → Accesos por Rol**: columnas = roles
@@ -194,10 +196,11 @@ pisa un cambio hecho después desde la pantalla.
 
 ## Implementación por fases
 
-1. **Modelo + seed + servicio + `/auth/me` + frontend leyendo `resources`.**
+1. ✅ **Modelo + seed + servicio + `/auth/me` + frontend leyendo `permissions`.**
    La restricción ya se ve en el menú y en las pantallas (seed restringido),
    pero la API todavía no la exige — se cierra en la fase 3.
-2. **Pantalla Accesos por Rol** (CRUD + auditoría).
+2. **Pantalla Accesos por Rol** (CRUD + auditoría) **+ alta de roles nuevos
+   desde "Roles y Grupos"** (aprobado 2026-10-07).
 3. **Enforcement en backend** con `[RequireResource]`, endpoint por
    endpoint, con tests de gate por controller (patrón
    `*ControllerGateTests`).
@@ -231,8 +234,37 @@ Bloqueos actuales para un rol nuevo, fuera de este modelo:
    Incremento G; el Incremento E (`RoleScopeFieldPermission` con
    `SystemRoleId`) la resuelve para los permisos de campo.
 
-## Decisiones abiertas
+## Fase 1 — implementado (2026-10-07)
 
-1. Aprobar o ajustar la matriz inicial restringida (sección "Siembra inicial").
-2. ¿Se agrega el alta de roles nuevos desde "Roles y Grupos" a este plan
-   (bloqueo 1 de "Roles nuevos")?
+Backend:
+- `schema.sql`: `gov.AppResources`, `gov.RoleResourcePermissions`, seed del
+  catálogo (17 recursos) y de la matriz restringida. Bloques idempotentes.
+- `AppResource`, `RoleResourcePermission` (Domain);
+  `IRoleResourceRepository`/`RoleResourceRepository` (solo lectura por
+  ahora); `IRoleResourceCatalogCache`/`RoleResourceCatalogCache` (IMemoryCache,
+  TTL 30 s); `IRoleResourceAccessService`/`RoleResourceAccessService` (reglas).
+- `AuthController.GetMe`: `Permissions` = recursos permitidos.
+- 9 tests nuevos (`Authorization/RoleResourceAccessServiceTests`): bypass
+  SystemAdmin, unión de roles, acción sin módulo padre, no delegable,
+  inactivo, rol nuevo sin filas, comparación sin mayúsculas. 121/121.
+
+Frontend:
+- Roles dinámicos: `RoleName` pasa a `string`; `MsalAuthProvider` ya no
+  filtra contra la lista fija `VALID_ROLES` (bloqueo 2 de "Roles nuevos",
+  resuelto).
+- `routes/routeAccess.ts`: `ROUTE_RESOURCE` + `canAccessRoute` +
+  `useCan(resourceKey)`. Sidebar y `RouterView` usan `user.permissions`.
+- Acciones: "Crear cuenta" deshabilitado sin `account-creation.create`;
+  agregar/quitar miembros de listas usa `distribution-lists.manage-members`
+  (reemplaza `WRITE_ROLES` fijo).
+
+**Orden de despliegue obligatorio**: aplicar el bloque nuevo de
+`schema.sql` **antes** de desplegar este backend. Sin las tablas,
+`/auth/me` falla y nadie puede entrar al portal.
+
+Pendiente para fase 3 (sin cambios todavía): la API sigue aplicando sus
+reglas fijas (`IsSystemAdminAsync`, `ReadRoles`/`WriteRoles`), y las
+pantallas de Configuración siguen mostrando controles de edición solo a
+SystemAdmin — delegar un módulo de Configuración desde la pantalla de la
+fase 2 no tendrá efecto real hasta la fase 3.
+

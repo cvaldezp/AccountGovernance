@@ -23,8 +23,8 @@ const GROUPS_NAV_ITEMS: NavItem[] = [
   { key: 'distribution-lists', label: 'Listas de Distribución', icon: '✉' },
 ];
 
-// Qué rol ve cada ítem lo decide ROUTE_ACCESS (routes/routeAccess.ts) — la
-// sección Configuración completa es exclusiva de SystemAdmin.
+// Qué ítem ve cada usuario lo decide ROUTE_RESOURCE + /auth/me permissions
+// (routes/routeAccess.ts), configurado en "Accesos por Rol".
 const CONFIG_NAV: NavItem[] = [
   { key: 'attribute-catalog',     label: 'Catálogo AD',             icon: '≡' },
   { key: 'permissions-matrix',    label: 'Matriz de Permisos',      icon: '⊞' },
@@ -128,7 +128,7 @@ function AboutPanel() {
 export function Sidebar() {
   const { currentRoute, navigate } = useRouter();
   const { user } = useAuth();
-  const canSee = (item: NavItem) => canAccessRoute(item.key, user?.roles);
+  const canSee = (item: NavItem) => canAccessRoute(item.key, user?.permissions);
   const mainItems   = MAIN_NAV.filter(canSee);
   const groupItems  = GROUPS_NAV_ITEMS.filter(canSee);
   const configItems = CONFIG_NAV.filter(canSee);

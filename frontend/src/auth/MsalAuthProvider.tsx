@@ -5,19 +5,11 @@ import { AuthContext } from './AuthContext';
 import { msalInstance } from './msalInstance';
 import { apiScopes } from './msalConfig';
 import { fetchMe, type MeDto } from './authApi';
-import type { AuthStatus, AuthUser, RoleName } from '../types';
+import type { AuthStatus, AuthUser } from '../types';
 
-// Role priority is resolved server-side (ISystemAuthorizationService.ResolvePrimaryRoleAsync) —
-// the frontend only validates that the value it received is a known RoleName.
-const VALID_ROLES = new Set<string>(['Seguridades', 'RRHH', 'Registro', 'DragonHelp', 'SystemAdmin']);
-
-function toRoleNames(raw: string[]): RoleName[] {
-  return raw.filter(r => VALID_ROLES.has(r)) as RoleName[];
-}
-
-function toRoleName(raw: string | null): RoleName | null {
-  return raw !== null && VALID_ROLES.has(raw) ? (raw as RoleName) : null;
-}
+// Role priority is resolved server-side (ISystemAuthorizationService.ResolvePrimaryRoleAsync).
+// Los roles son los RoleKey activos de gov.SystemRoles — el frontend no mantiene una lista
+// fija: un rol nuevo creado en "Roles y Grupos" llega tal cual, sin recompilar.
 
 // Inner component — can use MSAL hooks because it lives inside MsalProvider.
 function AuthBridge({ children }: { children: ReactNode }) {
@@ -85,7 +77,7 @@ function AuthBridge({ children }: { children: ReactNode }) {
 
   const user: AuthUser | null = (account && meData && isAuthorized)
     ? (() => {
-        const role = toRoleName(meData.primaryRole);
+        const role = meData.primaryRole;
         if (!role) {
           // Backend contract violation: isAuthorized=true implies a valid PrimaryRole.
           console.error('[AUTH] isAuthorized=true pero primaryRole es inválido:', meData.primaryRole);
@@ -96,7 +88,7 @@ function AuthBridge({ children }: { children: ReactNode }) {
           name:            meData.displayName ?? account.name ?? account.username,
           email:           meData.email       ?? meData.upn   ?? account.username,
           role,
-          roles:           toRoleNames(meData.roles),
+          roles:           meData.roles,
           upn:             meData.upn,
           objectId:        meData.objectId,
           primaryRole:     role,

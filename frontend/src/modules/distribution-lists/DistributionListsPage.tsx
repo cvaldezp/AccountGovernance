@@ -6,8 +6,7 @@ import type { Column } from '../../shared/ui';
 import type { User } from '../../types';
 import { useDistributionLists } from './useDistributionLists';
 import type { DistributionListSummary, DistributionListMember } from './types';
-
-const WRITE_ROLES = ['SystemAdmin', 'Seguridades'];
+import { useCan } from '../../routes/routeAccess';
 
 // ── Add member sub-flow: search existing AD users, pick one, confirm ────────────
 function AddMemberPanel({
@@ -108,8 +107,8 @@ function AddMemberPanel({
 }
 
 export function DistributionListsPage() {
-  const { user } = useAuth();
-  const canWrite = user?.roles.some(r => WRITE_ROLES.includes(r)) ?? false;
+  // Acción configurada en "Accesos por Rol" (gov.AppResources).
+  const canWrite = useCan('distribution-lists.manage-members');
 
   const {
     query, setQuery, results, searching, searched, searchError, search,

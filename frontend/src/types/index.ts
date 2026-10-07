@@ -1,4 +1,9 @@
-export type RoleName = 'DragonHelp' | 'Registro' | 'Seguridades' | 'RRHH' | 'SystemAdmin';
+// RoleKey de gov.SystemRoles. Texto libre a propósito (antes era la unión fija
+// 'DragonHelp' | 'Registro' | 'Seguridades' | 'RRHH' | 'SystemAdmin'): los roles se
+// administran en "Roles y Grupos" y uno nuevo debe funcionar sin recompilar. El
+// código legado que compara contra configuraciones estáticas (roles.config.ts,
+// roleFieldPermissions.ts) simplemente no encuentra un rol desconocido — fail-closed.
+export type RoleName = string;
 
 export type FieldName =
   | 'Custom-External-Email-Address'
@@ -63,12 +68,15 @@ export interface AuthUser {
   id:               string;
   name:             string;
   email:            string;
-  role:             RoleName;    // primary role — for backward compatibility with permission checks
-  roles:            RoleName[];  // all system roles derived from on-premises AD group memberships
+  // Roles = RoleKey de gov.SystemRoles tal cual los devuelve /api/auth/me — texto
+  // libre, no la unión RoleName: un rol nuevo creado en "Roles y Grupos" (ej.
+  // Desarrollo) debe llegar al frontend sin recompilar.
+  role:             string;      // primary role — for backward compatibility with permission checks
+  roles:            string[];    // all system roles derived from on-premises AD group memberships
   upn:              string;
   objectId:         string | null;
-  primaryRole:      RoleName;    // same value as `role`, exposed under the name /api/auth/me uses
-  permissions:      string[];    // reserved for future action-level grants — always empty for now
+  primaryRole:      string;      // same value as `role`, exposed under the name /api/auth/me uses
+  permissions:      string[];    // gov.AppResources keys (módulos/acciones) permitidos — ver routes/routeAccess.ts
   isAuthorized:     boolean;
   profileLoadedAt:  string;      // ISO timestamp — when this profile was fetched from /api/auth/me
 }

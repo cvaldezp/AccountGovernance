@@ -7,8 +7,11 @@ import { ValidationSummary } from './ValidationSummary';
 import { CreateResultView } from './CreateResultView';
 import { useAccountCreation } from './useAccountCreation';
 import { buildPolicyHint } from '../../shared/account-naming/normalizeAndValidateAccountName';
+import { useCan } from '../../routes/routeAccess';
 
 export function CreateAccountPage() {
+  // Acción configurada en "Accesos por Rol" (gov.AppResources).
+  const canCreate = useCan('account-creation.create');
   const {
     accountTypes,
     typesLoading,
@@ -196,9 +199,11 @@ export function CreateAccountPage() {
             <AppButton
               variant="primary"
               size="md"
-              disabled={!isFormReady}
+              disabled={!isFormReady || !canCreate}
               onClick={validateAndProceed}
-              title={isFormReady ? undefined : 'Complete todos los campos y valide el correo de recuperación'}
+              title={!canCreate
+                ? 'Su rol no tiene permiso para crear cuentas.'
+                : isFormReady ? undefined : 'Complete todos los campos y valide el correo de recuperación'}
             >
               Crear cuenta
             </AppButton>

@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<IAdministrativeScopeService,      AdministrativeScopeService>();
         services.AddScoped<IAccountNamingPolicyService,      AccountNamingPolicyService>();
         services.AddScoped<IRoleScopeAssignmentService,      RoleScopeAssignmentService>();
+        services.AddScoped<IRoleResourceAccessService,       RoleResourceAccessService>();
         return services;
     }
 }

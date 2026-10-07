@@ -32,10 +32,10 @@ function RouterView() {
   const { currentRoute } = useRouter();
   const { user } = useAuth();
 
-  // Guard de ruta — mismo criterio que el Sidebar (ROUTE_ACCESS). Se evalúa
+  // Guard de ruta — mismo criterio que el Sidebar (ROUTE_RESOURCE). Se evalúa
   // antes de montar la página, así ninguna llamada a la API de una pantalla
   // restringida llega a dispararse.
-  if (!canAccessRoute(currentRoute, user?.roles)) return <AccessDenied />;
+  if (!canAccessRoute(currentRoute, user?.permissions)) return <AccessDenied />;
 
   switch (currentRoute) {
     case 'dashboard':        return <DashboardPage />;

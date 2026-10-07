@@ -1,5 +1,6 @@
 using AccountGovernance.Application.DTOs;
 using AccountGovernance.Application.Interfaces;
+using AccountGovernance.Application.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,6 +13,7 @@ namespace AccountGovernance.Api.Controllers;
 public sealed class AuthController(
     ICurrentUserService         currentUser,
     ISystemAuthorizationService systemAuth,
+    IRoleResourceAccessService  resourceAccess,
     ILogger<AuthController>     logger
 ) : ControllerBase
 {
@@ -37,6 +39,7 @@ public sealed class AuthController(
         var roles        = await systemAuth.GetUserRolesAsync(currentUser.UserPrincipalName, ct);
         var isAuthorized = roles.Count > 0;
         var primaryRole  = await systemAuth.ResolvePrimaryRoleAsync(roles, ct);
+        var resources    = await resourceAccess.GetAllowedResourcesAsync(roles, ct);
 
         // TEMP LOG — remove once role/authorization resolution is validated end-to-end.
         logger.LogInformation(
@@ -57,7 +60,7 @@ public sealed class AuthController(
             ObjectId:     currentUser.ObjectId,
             Roles:        [.. roles],
             PrimaryRole:  primaryRole,
-            Permissions:  [], // reserved for future action-level grants
+            Permissions:  [.. resources], // módulos/acciones permitidos (gov.AppResources)
             IsAuthorized: isAuthorized
         ));
     }
