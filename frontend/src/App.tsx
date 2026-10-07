@@ -15,9 +15,27 @@ import { InitialGroupsPage } from './modules/initial-groups/InitialGroupsPage';
 import { SystemRolesConfigPage } from './modules/system-roles/SystemRolesConfigPage';
 import { DistributionListsPage } from './modules/distribution-lists/DistributionListsPage';
 import { AdministrativeScopesPage } from './modules/scopes/AdministrativeScopesPage';
+import { canAccessRoute } from './routes/routeAccess';
+import { AppCard } from './shared/ui';
+
+function AccessDenied() {
+  return (
+    <AppCard>
+      <div style={{ padding: '32px', textAlign: 'center', color: 'var(--ds-danger-dark)' }}>
+        Acceso denegado. Su rol no tiene acceso a esta sección.
+      </div>
+    </AppCard>
+  );
+}
 
 function RouterView() {
   const { currentRoute } = useRouter();
+  const { user } = useAuth();
+
+  // Guard de ruta — mismo criterio que el Sidebar (ROUTE_ACCESS). Se evalúa
+  // antes de montar la página, así ninguna llamada a la API de una pantalla
+  // restringida llega a dispararse.
+  if (!canAccessRoute(currentRoute, user?.roles)) return <AccessDenied />;
 
   switch (currentRoute) {
     case 'dashboard':        return <DashboardPage />;

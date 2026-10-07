@@ -10,9 +10,9 @@ namespace AccountGovernance.Api.Tests;
 
 /// <summary>
 /// Characterization tests for PermissionsController — Incremento A.
-/// Reads (matrix, attribute catalog, fields/me) are deliberately open to any
-/// authenticated user; only the attribute-catalog mutations are gated to
-/// SystemAdmin. Both facts must survive the refactor unchanged.
+/// fields/me is deliberately open to any authenticated user (it only returns the
+/// caller's own role configuration). The matrix and the attribute catalog —
+/// reads and mutations — are gated to SystemAdmin.
 /// </summary>
 public sealed class PermissionsControllerGateTests
 {
@@ -34,18 +34,10 @@ public sealed class PermissionsControllerGateTests
         return (controller, svc);
     }
 
-    public static IEnumerable<object[]> AnyRoleSets =>
-    [
-        [new string[] { "SystemAdmin" }],
-        [new string[] { "Registro" }],
-        [new string[] { }],
-    ];
-
-    [Theory]
-    [MemberData(nameof(AnyRoleSets))]
-    public async Task GetAllAttributes_AnyOrNoRole_Returns200AndNeverConsultsAuth(string[] roles)
+    [Fact]
+    public async Task GetAllAttributes_SystemAdmin_Returns200()
     {
-        var (controller, svc) = Build(roles: roles);
+        var (controller, svc) = Build(roles: ["SystemAdmin"]);
         svc.Setup(s => s.GetAllAttributesAsync(It.IsAny<CancellationToken>()))
            .ReturnsAsync(Result<IReadOnlyList<AttributeDto>>.Ok([SampleAttributeDto]));
 
@@ -54,6 +46,34 @@ public sealed class PermissionsControllerGateTests
         var ok = Assert.IsType<OkObjectResult>(result);
         Assert.Equal(200, ok.StatusCode);
         svc.Verify(s => s.GetAllAttributesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // La lectura del Catálogo AD y de la Matriz pasó a ser exclusiva de
+    // SystemAdmin (antes abierta a cualquier autenticado). fields/me sigue abierto.
+    [Theory]
+    [MemberData(nameof(NotSystemAdminRoleSets))]
+    public async Task GetAllAttributes_NotSystemAdmin_Returns403AndNeverCallsBackingService(string[] roles)
+    {
+        var (controller, svc) = Build(roles: roles);
+
+        var result = await controller.GetAllAttributes(CancellationToken.None);
+
+        var forbidden = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(403, forbidden.StatusCode);
+        svc.Verify(s => s.GetAllAttributesAsync(It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [MemberData(nameof(NotSystemAdminRoleSets))]
+    public async Task GetMatrix_NotSystemAdmin_Returns403AndNeverCallsBackingService(string[] roles)
+    {
+        var (controller, svc) = Build(roles: roles);
+
+        var result = await controller.GetMatrix(CancellationToken.None);
+
+        var forbidden = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(403, forbidden.StatusCode);
+        svc.Verify(s => s.GetMatrixAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

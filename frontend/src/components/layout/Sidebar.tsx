@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useRouter } from '../../routes/AppRoutes';
 import { useAuth } from '../../auth/useAuth';
+import { canAccessRoute } from '../../routes/routeAccess';
 import type { RouteKey } from '../../types';
 
 interface NavItem {
@@ -22,22 +23,13 @@ const GROUPS_NAV_ITEMS: NavItem[] = [
   { key: 'distribution-lists', label: 'Listas de Distribución', icon: '✉' },
 ];
 
-// Mismos roles de lectura que exige el backend (DistributionListsController.ReadRoles) —
-// RRHH no tiene acceso y nunca ve este módulo.
-const GROUPS_NAV_ROLES = ['SystemAdmin', 'Seguridades', 'DragonHelp', 'Registro'];
-
+// Qué rol ve cada ítem lo decide ROUTE_ACCESS (routes/routeAccess.ts) — la
+// sección Configuración completa es exclusiva de SystemAdmin.
 const CONFIG_NAV: NavItem[] = [
-  { key: 'attribute-catalog',    label: 'Catálogo AD',       icon: '≡' },
-  { key: 'permissions-matrix',   label: 'Matriz de Permisos',icon: '⊞' },
-  { key: 'account-type-config',  label: 'Tipos de Cuenta',   icon: '⊟' },
-  { key: 'initial-groups',       label: 'Grupos Iniciales',  icon: '⊕' },
-];
-
-// Visible only to SystemAdmin — these tables control every other user's authorization.
-// administrative-scopes: los Scopes exponen estructura interna de AD (Base DN, OUs,
-// atributos, ConnectionProfile) — no deben ser visibles para ningún otro rol, ni
-// siquiera en modo lectura, a diferencia del Catálogo AD / Matriz de Permisos.
-const SYSTEM_ADMIN_NAV: NavItem[] = [
+  { key: 'attribute-catalog',     label: 'Catálogo AD',             icon: '≡' },
+  { key: 'permissions-matrix',    label: 'Matriz de Permisos',      icon: '⊞' },
+  { key: 'account-type-config',   label: 'Tipos de Cuenta',         icon: '⊟' },
+  { key: 'initial-groups',        label: 'Grupos Iniciales',        icon: '⊕' },
   { key: 'system-roles-config',   label: 'Roles y Grupos',          icon: '⚙' },
   { key: 'administrative-scopes', label: 'Ámbitos Administrativos', icon: '◎' },
 ];
@@ -136,8 +128,10 @@ function AboutPanel() {
 export function Sidebar() {
   const { currentRoute, navigate } = useRouter();
   const { user } = useAuth();
-  const isSystemAdmin  = user?.roles.includes('SystemAdmin') ?? false;
-  const canAccessGroups = user?.roles.some(r => GROUPS_NAV_ROLES.includes(r)) ?? false;
+  const canSee = (item: NavItem) => canAccessRoute(item.key, user?.roles);
+  const mainItems   = MAIN_NAV.filter(canSee);
+  const groupItems  = GROUPS_NAV_ITEMS.filter(canSee);
+  const configItems = CONFIG_NAV.filter(canSee);
   const [showAbout, setShowAbout] = useState(false);
 
   const isActive = (key: RouteKey) =>
@@ -151,7 +145,7 @@ export function Sidebar() {
       </div>
 
       <nav className="sidebar-nav">
-        {MAIN_NAV.map(item => (
+        {mainItems.map(item => (
           <NavButton
             key={item.key}
             item={item}
@@ -160,17 +154,17 @@ export function Sidebar() {
           />
         ))}
 
-        {canAccessGroups && (
+        {groupItems.length > 0 && (
           <NavGroup
             label="Grupos"
             icon="◈"
-            items={GROUPS_NAV_ITEMS}
+            items={groupItems}
             isActive={isActive}
             onNavigate={navigate}
           />
         )}
 
-        <div style={{
+        {configItems.length > 0 && <div style={{
           margin:     '16px 0 6px',
           padding:    '0 16px',
           fontSize:   '10px',
@@ -181,18 +175,9 @@ export function Sidebar() {
           userSelect: 'none',
         }}>
           Configuración
-        </div>
+        </div>}
 
-        {CONFIG_NAV.map(item => (
-          <NavButton
-            key={item.key}
-            item={item}
-            active={isActive(item.key)}
-            onClick={() => navigate(item.key)}
-          />
-        ))}
-
-        {isSystemAdmin && SYSTEM_ADMIN_NAV.map(item => (
+        {configItems.map(item => (
           <NavButton
             key={item.key}
             item={item}

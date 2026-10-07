@@ -42,36 +42,50 @@ public sealed class PermissionsController(
         return result.IsSuccess ? Ok(result.Data) : BadRequest(new { error = result.Error });
     }
 
-    /// <summary>Return the full N-field × 4-role permissions matrix.</summary>
+    /// <summary>Return the full N-field × 4-role permissions matrix. SystemAdmin only.</summary>
     [HttpGet("matrix")]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetMatrix(CancellationToken ct)
     {
+        if (!await IsSystemAdminAsync(ct))
+            return StatusCode(403, new { error = "Solo el rol SystemAdmin puede administrar atributos AD." });
+
         var result = await permissionService.GetMatrixAsync(ct);
         return result.IsSuccess
             ? Ok(result.Data)
             : StatusCode(StatusCodes.Status500InternalServerError, new { error = result.Error });
     }
 
-    // ── Attribute admin (CRUD) — mutaciones restringidas a SystemAdmin ──────
+    // ── Attribute admin (CRUD) — lectura y mutaciones restringidas a SystemAdmin ──
+    // fields/me (arriba) sigue abierto: es lo que consume Buscar Usuario para
+    // cualquier rol, y solo devuelve la configuración del propio rol del caller.
 
-    /// <summary>List every AD attribute managed by the portal (active and inactive).</summary>
+    /// <summary>List every AD attribute managed by the portal (active and inactive). SystemAdmin only.</summary>
     [HttpGet("attributes")]
     [ProducesResponseType(typeof(IReadOnlyList<AttributeDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetAllAttributes(CancellationToken ct)
     {
+        if (!await IsSystemAdminAsync(ct))
+            return StatusCode(403, new { error = "Solo el rol SystemAdmin puede administrar atributos AD." });
+
         var result = await permissionService.GetAllAttributesAsync(ct);
         return result.IsSuccess
             ? Ok(result.Data)
             : StatusCode(StatusCodes.Status500InternalServerError, new { error = result.Error });
     }
 
-    /// <summary>Get a single AD attribute definition.</summary>
+    /// <summary>Get a single AD attribute definition. SystemAdmin only.</summary>
     [HttpGet("attributes/{fieldKey}")]
     [ProducesResponseType(typeof(AttributeDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetAttributeByKey(string fieldKey, CancellationToken ct)
     {
+        if (!await IsSystemAdminAsync(ct))
+            return StatusCode(403, new { error = "Solo el rol SystemAdmin puede administrar atributos AD." });
+
         var result = await permissionService.GetAttributeByKeyAsync(fieldKey, ct);
         return result.IsSuccess ? Ok(result.Data) : NotFound(new { error = result.Error });
     }
