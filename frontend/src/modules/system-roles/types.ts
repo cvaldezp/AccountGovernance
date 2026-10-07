@@ -58,3 +58,12 @@ export const BLANK_GROUP_FORM: CreateGroupForm = {
   groupSid:        '',
   isActive:        true,
 };
+
+export interface CreateRoleForm {
+  roleKey:     string;
+  displayName: string;
+  description: string;
+  priority:    number;
+}
+
+export const BLANK_ROLE_FORM: CreateRoleForm = { roleKey: '', displayName: '', description: '', priority: 50 };

@@ -23,4 +23,7 @@ public enum AuditActionType
     RoleScopeAssigned,
     RoleScopeActivated,
     RoleScopeDeactivated,
+    RoleResourceGranted,
+    RoleResourceRevoked,
+    SystemRoleCreated,
 }

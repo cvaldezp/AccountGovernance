@@ -24,6 +24,10 @@ public interface ISystemRoleRepository
 
     Task<bool> ExistsAsync(string roleKey, CancellationToken ct = default);
 
+    Task CreateAsync(
+        string roleKey, string displayName, string? description,
+        int priority, string updatedBy, CancellationToken ct = default);
+
     Task UpdateAsync(
         string roleKey, string displayName, string? description,
         int priority, bool isActive, string updatedBy, CancellationToken ct = default);

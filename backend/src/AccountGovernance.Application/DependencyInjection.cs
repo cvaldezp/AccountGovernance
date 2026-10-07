@@ -24,6 +24,7 @@ public static class DependencyInjection
         services.AddScoped<IAccountNamingPolicyService,      AccountNamingPolicyService>();
         services.AddScoped<IRoleScopeAssignmentService,      RoleScopeAssignmentService>();
         services.AddScoped<IRoleResourceAccessService,       RoleResourceAccessService>();
+        services.AddScoped<IRoleResourceAdminService,        RoleResourceAdminService>();
         return services;
     }
 }

@@ -23,6 +23,7 @@ export const ROUTE_RESOURCE: Record<RouteKey, string> = {
   'initial-groups':        'config.initial-groups',
   'system-roles-config':   'config.system-roles',
   'administrative-scopes': 'config.administrative-scopes',
+  'role-access':           'config.role-access',
 };
 
 export function canAccessResource(resourceKey: string, permissions: readonly string[] | undefined): boolean {

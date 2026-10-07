@@ -75,4 +75,18 @@ public sealed class SystemRolesControllerGateTests
         Assert.Same(failure, thrown);
         svc.Verify(s => s.GetAllAsync(It.IsAny<CancellationToken>()), Times.Never);
     }
+
+    [Theory]
+    [MemberData(nameof(NotSystemAdminRoleSets))]
+    public async Task Create_NotSystemAdmin_Returns403AndNeverCallsBackingService(string[] roles)
+    {
+        var (controller, svc, _) = Build(roles: roles);
+
+        var result = await controller.Create(new CreateSystemRoleDto("Desarrollo", "Desarrollo", null, 50), CancellationToken.None);
+
+        var forbidden = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(403, forbidden.StatusCode);
+        Assert.Equal(ExpectedForbiddenMessage, forbidden.GetErrorMessage());
+        svc.Verify(s => s.CreateAsync(It.IsAny<CreateSystemRoleDto>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
 }

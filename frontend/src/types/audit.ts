@@ -23,7 +23,10 @@ export type AuditActionType =
   | 'NamingPolicyUpdated'
   | 'RoleScopeAssigned'
   | 'RoleScopeActivated'
-  | 'RoleScopeDeactivated';
+  | 'RoleScopeDeactivated'
+  | 'RoleResourceGranted'
+  | 'RoleResourceRevoked'
+  | 'SystemRoleCreated';
 
 export interface AuditEntry {
   id:          string;

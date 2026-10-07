@@ -1,5 +1,5 @@
 import { authFetch } from '../../api/authFetch';
-import type { AdGroupValidation, CreateGroupForm, SystemRole, UpdateRoleForm } from './types';
+import type { AdGroupValidation, CreateGroupForm, CreateRoleForm, SystemRole, UpdateRoleForm } from './types';
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -23,6 +23,21 @@ export const systemRolesApi = {
   async getAll(): Promise<SystemRole[]> {
     const res = await apiFetch('/api/system-roles');
     return res.json() as Promise<SystemRole[]>;
+  },
+
+  /** Crea un rol nuevo — nace activo, sin grupos AD y sin accesos (fail-closed). */
+  async createRole(form: CreateRoleForm): Promise<SystemRole> {
+    const res = await apiFetch('/api/system-roles', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        roleKey:     form.roleKey.trim(),
+        displayName: form.displayName.trim(),
+        description: form.description.trim() || null,
+        priority:    form.priority,
+      }),
+    });
+    return res.json() as Promise<SystemRole>;
   },
 
   async updateRole(roleKey: string, form: UpdateRoleForm): Promise<SystemRole> {

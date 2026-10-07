@@ -15,6 +15,7 @@ import { InitialGroupsPage } from './modules/initial-groups/InitialGroupsPage';
 import { SystemRolesConfigPage } from './modules/system-roles/SystemRolesConfigPage';
 import { DistributionListsPage } from './modules/distribution-lists/DistributionListsPage';
 import { AdministrativeScopesPage } from './modules/scopes/AdministrativeScopesPage';
+import { RoleAccessPage } from './modules/role-access/RoleAccessPage';
 import { canAccessRoute } from './routes/routeAccess';
 import { AppCard } from './shared/ui';
 
@@ -50,6 +51,7 @@ function RouterView() {
     case 'system-roles-config': return <SystemRolesConfigPage />;
     case 'distribution-lists':  return <DistributionListsPage />;
     case 'administrative-scopes': return <AdministrativeScopesPage />;
+    case 'role-access':         return <RoleAccessPage />;
     default:                 return <DashboardPage />;
   }
 }

@@ -2,11 +2,20 @@ using AccountGovernance.Application.Common;
 using AccountGovernance.Application.DTOs;
 using AccountGovernance.Application.Interfaces;
 using AccountGovernance.Domain.Entities;
+using AccountGovernance.Domain.Enums;
+using System.Text.RegularExpressions;
 
 namespace AccountGovernance.Application.Services;
 
-public sealed class SystemRoleService(ISystemRoleRepository repo) : ISystemRoleService
+public sealed partial class SystemRoleService(
+    ISystemRoleRepository repo,
+    IAuditRepository      auditRepository) : ISystemRoleService
 {
+    // Clave técnica: se usa en gov.RoleResourcePermissions, auditoría y /auth/me —
+    // sin espacios ni acentos para que no haya ambigüedad al compararla.
+    [GeneratedRegex("^[A-Za-z][A-Za-z0-9_-]{1,99}$")]
+    private static partial Regex RoleKeyPattern();
+
     public async Task<Result<IReadOnlyList<SystemRoleDto>>> GetAllAsync(CancellationToken ct)
     {
         var roles = await repo.GetAllAsync(ct);
@@ -27,6 +36,39 @@ public sealed class SystemRoleService(ISystemRoleRepository repo) : ISystemRoleS
 
         var groups = await repo.GetGroupsByRoleKeyAsync(roleKey, ct);
         return Result<SystemRoleDto>.Ok(ToDto(role, groups));
+    }
+
+    public async Task<Result<SystemRoleDto>> CreateAsync(
+        CreateSystemRoleDto dto, string createdBy, CancellationToken ct)
+    {
+        var roleKey = dto.RoleKey?.Trim() ?? string.Empty;
+        if (!RoleKeyPattern().IsMatch(roleKey))
+            return Result<SystemRoleDto>.Fail(
+                "La clave del rol debe empezar con una letra y contener solo letras, números, '-' o '_' (2 a 100 caracteres, sin espacios ni acentos).",
+                "VALIDATION");
+        if (string.IsNullOrWhiteSpace(dto.DisplayName))
+            return Result<SystemRoleDto>.Fail("El nombre visible es obligatorio.", "VALIDATION");
+        if (dto.Priority < 1)
+            return Result<SystemRoleDto>.Fail("La prioridad debe ser un número positivo.", "VALIDATION");
+        if (await repo.ExistsAsync(roleKey, ct))
+            return Result<SystemRoleDto>.Fail($"Ya existe un rol con la clave '{roleKey}'.", "DUPLICATE");
+
+        await repo.CreateAsync(roleKey, dto.DisplayName.Trim(), dto.Description?.Trim(), dto.Priority, createdBy, ct);
+
+        await auditRepository.AddEntryAsync(new AuditEntry
+        {
+            Id          = Guid.NewGuid().ToString(),
+            Timestamp   = DateTime.UtcNow,
+            PerformedBy = createdBy,
+            RoleName    = RoleName.SystemAdmin,
+            ActionType  = AuditActionType.SystemRoleCreated,
+            NewValue    = $"Rol '{roleKey}' ({dto.DisplayName.Trim()}) creado — sin grupos AD ni accesos",
+            TargetUser  = roleKey,
+            Domain      = "SYSTEM",
+            Success     = true,
+        }, ct);
+
+        return await GetByKeyAsync(roleKey, ct);
     }
 
     public async Task<Result<SystemRoleDto>> UpdateAsync(

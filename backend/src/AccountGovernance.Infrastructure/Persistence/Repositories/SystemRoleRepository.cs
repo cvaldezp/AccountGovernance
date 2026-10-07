@@ -28,6 +28,23 @@ public sealed class SystemRoleRepository(IDbConnectionFactory db) : ISystemRoleR
             "SELECT COUNT(1) FROM gov.SystemRoles WHERE RoleKey = @RoleKey", new { RoleKey = roleKey }) > 0;
     }
 
+    public async Task CreateAsync(
+        string roleKey, string displayName, string? description,
+        int priority, string updatedBy, CancellationToken ct = default)
+    {
+        const string sql = """
+            INSERT INTO gov.SystemRoles (RoleKey, DisplayName, Description, Priority, IsActive, UpdatedBy)
+            VALUES (@RoleKey, @DisplayName, @Description, @Priority, 1, @UpdatedBy)
+            """;
+
+        using var conn = db.Create();
+        await conn.ExecuteAsync(sql, new
+        {
+            RoleKey = roleKey, DisplayName = displayName, Description = description,
+            Priority = priority, UpdatedBy = updatedBy,
+        });
+    }
+
     public async Task UpdateAsync(
         string roleKey, string displayName, string? description,
         int priority, bool isActive, string updatedBy, CancellationToken ct = default)

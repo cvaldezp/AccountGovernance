@@ -32,6 +32,7 @@ const CONFIG_NAV: NavItem[] = [
   { key: 'initial-groups',        label: 'Grupos Iniciales',        icon: '⊕' },
   { key: 'system-roles-config',   label: 'Roles y Grupos',          icon: '⚙' },
   { key: 'administrative-scopes', label: 'Ámbitos Administrativos', icon: '◎' },
+  { key: 'role-access',           label: 'Accesos por Rol',         icon: '⚿' },
 ];
 
 function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }) {

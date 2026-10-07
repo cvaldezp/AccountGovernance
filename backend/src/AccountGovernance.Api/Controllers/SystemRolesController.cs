@@ -50,6 +50,24 @@ public sealed class SystemRolesController(
         return result.IsSuccess ? Ok(result.Data) : NotFound(new { error = result.Error });
     }
 
+    /// <summary>Crea un rol nuevo (activo, sin grupos AD y sin accesos — fail-closed).</summary>
+    [HttpPost]
+    [ProducesResponseType(typeof(SystemRoleDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> Create([FromBody] CreateSystemRoleDto dto, CancellationToken ct)
+    {
+        if (!await IsSystemAdminAsync(ct))
+            return StatusCode(403, new { error = "Solo el rol SystemAdmin puede administrar roles y grupos." });
+
+        var createdBy = currentUser.UserPrincipalName ?? "sistema";
+        var result    = await svc.CreateAsync(dto, createdBy, ct);
+
+        return result.IsSuccess
+            ? StatusCode(201, result.Data)
+            : BadRequest(new { error = result.Error, code = result.ErrorCode });
+    }
+
     [HttpPut("{roleKey}")]
     [ProducesResponseType(typeof(SystemRoleDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

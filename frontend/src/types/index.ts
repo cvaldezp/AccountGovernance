@@ -103,7 +103,8 @@ export type RouteKey =
   | 'initial-groups'
   | 'system-roles-config'
   | 'distribution-lists'
-  | 'administrative-scopes';
+  | 'administrative-scopes'
+  | 'role-access';
 
 // ── Parametric field configuration ──────────────────────────────────────────
 

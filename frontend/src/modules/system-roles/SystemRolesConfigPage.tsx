@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
-import { AppCard, AppButton, AppBadge, AppInput, AppPageHeader } from '../../shared/ui';
+import { AppCard, AppButton, AppBadge, AppInput, AppModal, AppPageHeader } from '../../shared/ui';
+import { errorMessage } from '../../api/apiFetch';
+import { systemRolesApi } from './systemRolesApi';
 import { useAuth } from '../../auth/useAuth';
 import { useSystemRoles } from './useSystemRoles';
-import type { AdGroupValidation, CreateGroupForm, SystemRole } from './types';
+import { BLANK_ROLE_FORM } from './types';
+import type { AdGroupValidation, CreateGroupForm, CreateRoleForm, SystemRole } from './types';
 import { useRoleScopeAssignments } from '../role-scope-assignments/useRoleScopeAssignments';
 import { administrativeScopesApi } from '../scopes/administrativeScopesApi';
 import type { AdministrativeScope } from '../scopes/types';
@@ -262,6 +265,89 @@ function RoleScopesSection({
   );
 }
 
+// ── Alta de rol nuevo ────────────────────────────────────────────────────────
+function CreateRoleModal({ open, onClose, onCreated }: {
+  open: boolean; onClose: () => void; onCreated: () => void;
+}) {
+  const [form,   setForm]   = useState<CreateRoleForm>(BLANK_ROLE_FORM);
+  const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState<string | null>(null);
+
+  const close = () => { setForm(BLANK_ROLE_FORM); setError(null); onClose(); };
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await systemRolesApi.createRole(form);
+      setForm(BLANK_ROLE_FORM);
+      onCreated();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <AppModal
+      open={open}
+      onClose={close}
+      title="Nuevo rol"
+      loading={saving}
+      footer={(
+        <>
+          <AppButton variant="secondary" size="sm" onClick={close} disabled={saving}>Cancelar</AppButton>
+          <AppButton
+            variant="primary" size="sm" onClick={() => void save()} loading={saving}
+            disabled={!form.roleKey.trim() || !form.displayName.trim()}
+          >
+            Crear rol
+          </AppButton>
+        </>
+      )}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <AppInput
+          label="Clave del rol"
+          placeholder="Desarrollo"
+          value={form.roleKey}
+          onChange={e => setForm(f => ({ ...f, roleKey: e.target.value }))}
+        />
+        <span style={{ fontSize: '11px', color: 'var(--ds-neutral-400)', marginTop: '-8px' }}>
+          Letras, números, '-' o '_', sin espacios ni acentos. No se puede cambiar después.
+        </span>
+        <AppInput
+          label="Nombre visible"
+          placeholder="Equipo de Desarrollo"
+          value={form.displayName}
+          onChange={e => setForm(f => ({ ...f, displayName: e.target.value }))}
+        />
+        <AppInput
+          label="Descripción"
+          value={form.description}
+          onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+        />
+        <AppInput
+          label="Prioridad"
+          type="number"
+          min={1}
+          value={form.priority}
+          onChange={e => setForm(f => ({ ...f, priority: Number(e.target.value) }))}
+        />
+        <span style={{ fontSize: '11px', color: 'var(--ds-neutral-400)', marginTop: '-8px' }}>
+          Menor número = se elige primero cuando un usuario tiene varios roles.
+        </span>
+        <div className="ds-alert ds-alert--info" style={{ margin: 0 }}>
+          El rol se crea activo pero sin grupos AD ni accesos: nadie lo tiene hasta que le agregues
+          un grupo aquí, y no ve nada hasta que le otorgues módulos en Accesos por Rol.
+        </div>
+        {error && <div className="ds-alert ds-alert--error" style={{ margin: 0 }}>{error}</div>}
+      </div>
+    </AppModal>
+  );
+}
+
 export function SystemRolesConfigPage() {
   const { user } = useAuth();
   const isSystemAdmin = user?.roles.includes('SystemAdmin') ?? false;
@@ -278,8 +364,10 @@ export function SystemRolesConfigPage() {
     });
   }, []);
 
+  const [creatingRole, setCreatingRole] = useState(false);
+
   const {
-    roles, loading, loadError,
+    roles, loading, loadError, reload,
     editingRoleKey, roleForm, savingRole, roleSaveError,
     startEditRole, cancelEditRole, updateRoleField, saveRole,
     editingGroupId, groupForm, groupValidation, validatingGroup, savingGroup, groupSaveError,
@@ -307,6 +395,13 @@ export function SystemRolesConfigPage() {
       <AppPageHeader
         title="Roles y Grupos"
         description="Administra los roles del sistema y los grupos de Active Directory que otorgan cada rol. Estos datos controlan quién puede acceder a Account Governance."
+        action={<AppButton variant="primary" size="sm" onClick={() => setCreatingRole(true)}>+ Nuevo rol</AppButton>}
+      />
+
+      <CreateRoleModal
+        open={creatingRole}
+        onClose={() => setCreatingRole(false)}
+        onCreated={() => { setCreatingRole(false); void reload(); }}
       />
 
       {loading && <div className="ds-loading">Cargando roles…</div>}

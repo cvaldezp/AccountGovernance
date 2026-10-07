@@ -24,6 +24,15 @@ public sealed record SystemRoleDto(
     IReadOnlyList<SystemRoleGroupDto> Groups
 );
 
+/// <summary>Alta de un rol nuevo. RoleKey es la clave técnica e inmutable (ej. "Desarrollo");
+/// el rol nace activo, sin grupos AD y sin ningún acceso (fail-closed).</summary>
+public sealed record CreateSystemRoleDto(
+    string  RoleKey,
+    string  DisplayName,
+    string? Description,
+    int     Priority
+);
+
 public sealed record UpdateSystemRoleDto(
     string  DisplayName,
     string? Description,

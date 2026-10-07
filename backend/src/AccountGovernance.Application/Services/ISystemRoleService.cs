@@ -9,6 +9,9 @@ public interface ISystemRoleService
 
     Task<Result<SystemRoleDto>> GetByKeyAsync(string roleKey, CancellationToken ct);
 
+    Task<Result<SystemRoleDto>> CreateAsync(
+        CreateSystemRoleDto dto, string createdBy, CancellationToken ct);
+
     Task<Result<SystemRoleDto>> UpdateAsync(
         string roleKey, UpdateSystemRoleDto dto, string updatedBy, CancellationToken ct);
 

@@ -29,6 +29,9 @@ const ACTION_LABELS: Record<AuditActionType, string> = {
   RoleScopeAssigned:             'Ámbito asignado a rol',
   RoleScopeActivated:            'Asignación de ámbito activada',
   RoleScopeDeactivated:          'Asignación de ámbito inactivada',
+  RoleResourceGranted:           'Acceso otorgado a rol',
+  RoleResourceRevoked:           'Acceso revocado a rol',
+  SystemRoleCreated:             'Rol creado',
 };
 
 const ACTION_VARIANT: Record<AuditActionType, 'info' | 'success' | 'warning'> = {
@@ -53,6 +56,9 @@ const ACTION_VARIANT: Record<AuditActionType, 'info' | 'success' | 'warning'> = 
   RoleScopeAssigned:             'success',
   RoleScopeActivated:            'success',
   RoleScopeDeactivated:          'warning',
+  RoleResourceGranted:           'success',
+  RoleResourceRevoked:           'warning',
+  SystemRoleCreated:             'success',
 };
 
 const DOMAIN_COLOR: Record<string, string> = {
