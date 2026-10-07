@@ -30,9 +30,16 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-# Evita caracteres incorrectos en la salida de Vite/npm.
-[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
-$OutputEncoding = [Console]::OutputEncoding
+# Evita caracteres incorrectos en la salida de Vite/npm. En hosts sin consola
+# real (ventana de runas, terminal integrada) el setter falla con "Controlador
+# no válido" — es solo cosmético, así que no debe abortar el despliegue.
+try {
+    [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    $OutputEncoding = [Console]::OutputEncoding
+}
+catch {
+    Write-Warning "No se pudo fijar la codificación UTF-8 de la consola; se continúa igual."
+}
 
 # ============================================================
 # CONFIGURACIÓN
